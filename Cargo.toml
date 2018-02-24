@@ -5,3 +5,4 @@ authors = ["Christofer Nolander <christofer.nolander@gmail.com>"]
 
 [dependencies]
 glium = "*"
+trap = {git = "https://github.com/Zynapse500/trap-rs"}

@@ -7,7 +7,8 @@ pub struct AABB {
     pub bottom: f64,
 
     // Determines if an edge can be collided with
-    pub edges: [bool; 4]
+    // [left, right, top, bottom]
+    pub edges: [bool; 4],
 }
 
 
@@ -36,22 +37,57 @@ impl super::Collide<AABB> for AABB {
         // Intersect on x
         if self.left < other.right && other.left < self.right &&
             self.top < other.bottom && other.top < self.bottom {
-            let left = self.right - other.left;
-            let right = other.right - self.left;
+            let left = other.right - self.left;
+            let right = self.right - other.left;
 
-            let top = self.bottom - other.top;
-            let bottom = other.bottom - self.top;
+            let top = other.bottom - self.top;
+            let bottom = self.bottom - other.top;
 
-            let x = if left < right { left } else { right };
-            let y = if top < bottom { top } else { bottom };
-
-            if x < y {
-                Some((x, (if left < right {[-x, 0.0]} else {[x, 0.0]}).into()))
+            let x = if left < right {
+                if self.edges[0] && other.edges[1] {Some(left) } else {None}
             } else {
-                Some((x, (if top < bottom {[0.0, -y]} else {[0.0, y]}).into()))
+                if self.edges[1] && other.edges[0] {Some(right) } else {None}
+            };
+
+            let y = if top < bottom {
+                if self.edges[2] && other.edges[3] {Some(top) } else {None}
+            } else {
+                if self.edges[3] && other.edges[2] {Some(bottom) } else {None}
+            };
+
+            if x.is_some() && y.is_some() {
+                let x = x.unwrap();
+                let y = y.unwrap();
+
+                if x < y {
+                    return Some((x, [if left < right {x} else {-x}, 0.0].into()));
+                } else {
+                    return Some((y, [0.0, if top < bottom {y} else {-y}].into()));
+                }
+            } else if x.is_some() && y.is_none() {
+                let x = x.unwrap();
+                return Some((x, [if left < right {x} else {-x}, 0.0].into()));
+            } else if x.is_none() && y.is_some() {
+                let y = y.unwrap();
+                return Some((y, [0.0, if top < bottom {y} else {-y}].into()));
             }
-        } else {
-            None
         }
+
+        return None;
     }
 }
+
+
+impl super::Collide<super::ConvexHull> for AABB {
+    fn overlap(&self, other: &super::ConvexHull) -> Option<(f64, Vector2)> {
+        let hull = super::ConvexHull::from_points(&[
+            Vector2::new(self.left, self.top),
+            Vector2::new(self.right, self.top),
+            Vector2::new(self.right, self.bottom),
+            Vector2::new(self.left, self.bottom),
+        ]);
+
+        hull.overlap(other)
+    }
+}
+
