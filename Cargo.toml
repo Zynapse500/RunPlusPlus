@@ -1,0 +1,7 @@
+[package]
+name = "runplusplus"
+version = "0.1.0"
+authors = ["Christofer Nolander <christofer.nolander@gmail.com>"]
+
+[dependencies]
+glium = "*"
