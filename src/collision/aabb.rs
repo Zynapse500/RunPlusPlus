@@ -30,6 +30,13 @@ impl AABB {
         self.top += amount.y;
         self.bottom += amount.y;
     }
+
+
+    /// Returns true if two boxes intersect
+    pub fn intersects(&self, other: &AABB) -> bool {
+        self.left <= other.right && other.left <= self.right &&
+            self.top <= other.bottom && other.top <= self.bottom
+    }
 }
 
 
@@ -56,6 +63,13 @@ impl Into<super::ConvexHull> for AABB {
                 Some(set)
             }
         )
+    }
+}
+
+
+impl super::Bounded for AABB {
+    fn bounding_box(&self) -> AABB {
+        self.clone()
     }
 }
 

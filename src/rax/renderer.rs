@@ -122,6 +122,24 @@ impl Renderer {
     }
 
 
+    /// Render the outline of a rectangle
+    pub fn draw_rectangle(&mut self, left: f64, right: f64, top: f64, bottom: f64) {
+        let width = self.line_width;
+
+        // Top
+        self.fill_rectangle(left, right, top, top + width);
+
+        // Right
+        self.fill_rectangle(right - width, right, top, bottom);
+
+        // Bottom
+        self.fill_rectangle(left, right, bottom - width, bottom);
+
+        // Left
+        self.fill_rectangle(left, left + width, top, bottom);
+    }
+
+
     /// Render a convex polygon
     pub fn fill_convex(&mut self, points: &[Vector2]) {
         let start_index = self.vertices.len() as u32;

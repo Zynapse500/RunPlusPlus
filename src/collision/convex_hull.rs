@@ -85,6 +85,12 @@ impl ConvexHull {
     }
 
 
+    /// Clear all normals from the ignored list
+    pub fn clear_ignored_normals(&mut self) {
+        self.ignored_normals.clear();
+    }
+
+
     /// Translate the convex hull
     pub fn translate(&mut self, amount: Vector2) {
         for point in self.points.iter_mut() {
@@ -93,6 +99,31 @@ impl ConvexHull {
     }
 }
 
+
+impl super::Bounded for ConvexHull {
+    fn bounding_box(&self) -> super::AABB {
+        use std::f64::INFINITY;
+        let mut left = INFINITY;
+        let mut right = -INFINITY;
+        let mut top = INFINITY;
+        let mut bottom = -INFINITY;
+
+        for point in self.points.iter() {
+            if point.x < left { left = point.x; }
+            if point.x > right { right = point.x; }
+            if point.y < top { top = point.y; }
+            if point.y > bottom { bottom = point.y; }
+        }
+
+        super::AABB {
+            left,
+            right,
+            top,
+            bottom,
+            edges: [true; 4],
+        }
+    }
+}
 
 
 impl super::Collide<ConvexHull> for ConvexHull {
