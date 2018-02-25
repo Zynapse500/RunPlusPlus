@@ -19,8 +19,9 @@ fn main() {
     let game = rax::GameBuilder::new()
         .with_title("R++")
         .with_size(1280, 720)
-        .with_samples(8)
-        .with_vsync(true);
+        .with_fullscreen(true)
+        .with_vsync(false)
+        .with_samples(8);
 
     game.run::<RunPlusPlus>();
 }
@@ -89,7 +90,7 @@ impl rax::Game for RunPlusPlus {
         if self.pressed_keys.contains(&KeyCode::D) { delta.x += 1.0; }
         if self.pressed_keys.contains(&KeyCode::W) { delta.y -= 1.0; }
         if self.pressed_keys.contains(&KeyCode::S) { delta.y += 1.0; }
-        if delta.len() != 0.0 { self.velocity += (delta.norm() * 600.0 * dt); }
+        if delta.len() != 0.0 { self.velocity += (delta.norm() * 2000.0 * dt); }
 
         self.velocity -= self.velocity * dt * 4.0;
         self.velocity.y += dt * 1600.0;
@@ -97,14 +98,24 @@ impl rax::Game for RunPlusPlus {
 
         let mut i = 0;
         loop {
-            if let Some((overlap, resolve)) = self.tilemap.overlap(&self.player) {
+            let first = {
+                // First, find all overlaps, then find the smallest overlap
+                let obstacles: &[&Collide<ConvexHull>] = &[&self.convex, &self.tilemap];
+                obstacles.into_iter().filter_map(|o|{o.overlap(&self.player)})
+                    .min_by(|a, b|{ a.0.partial_cmp(&b.0).unwrap() })
+            };
+
+            if let Some((overlap, resolve)) = first {
                 self.player.translate(-resolve);
 
                 let normal = -resolve.norm();
-                let plane = Vector2::new(normal.y, -normal.x);
 
-                let dot = plane.dot(&self.velocity);
-                self.velocity = dot * plane;
+                if normal.dot(&self.velocity) < 0.0 {
+                    let plane = Vector2::new(normal.y, -normal.x);
+
+                    let dot = plane.dot(&self.velocity);
+                    self.velocity = dot * plane;
+                }
 
                 i += 1;
                 if i > 100 {
@@ -161,15 +172,17 @@ impl rax::Game for RunPlusPlus {
 
         if button == MouseButton::Left {
             self.tilemap.add_tile([bx, by].into())
-        } else {
+        } else if button == MouseButton::Right {
             self.tilemap.remove_tile([bx, by].into())
+        } else {
+            self.tilemap.add_slab([bx, by].into())
         }
     }
 }
 
 
 struct TileMap {
-    tiles: HashMap<Vector2i, AABB>
+    tiles: HashMap<Vector2i, ConvexHull>
 }
 
 impl TileMap {
@@ -187,29 +200,57 @@ impl TileMap {
         let x = pos.x as f64 * w;
         let y = pos.y as f64 * h;
 
-        let mut tile = AABB {
+        let mut tile: ConvexHull = AABB {
             left: x,
             right: x + w,
             top: y,
             bottom: y + h,
             edges: [true; 4],
-        };
+        }.into();
 
         if let Some(block) = self.tiles.get_mut(&[pos.x - 1, pos.y].into()) {
-            tile.edges[0] = false;
-            block.edges[1] = false;
+            tile.ignore_normal(Vector2::new(-1.0, 0.0));
+            block.ignore_normal(Vector2::new(1.0, 0.0));
         }
         if let Some(block) = self.tiles.get_mut(&[pos.x + 1, pos.y].into()) {
-            tile.edges[1] = false;
-            block.edges[0] = false;
+            tile.ignore_normal(Vector2::new(1.0, 0.0));
+            block.ignore_normal(Vector2::new(-1.0, 0.0));
         }
         if let Some(block) = self.tiles.get_mut(&[pos.x, pos.y - 1].into()) {
-            tile.edges[2] = false;
-            block.edges[3] = false;
+            tile.ignore_normal(Vector2::new(0.0, -1.0));
+            block.ignore_normal(Vector2::new(0.0, 1.0));
         }
         if let Some(block) = self.tiles.get_mut(&[pos.x, pos.y + 1].into()) {
-            tile.edges[3] = false;
-            block.edges[2] = false;
+            tile.ignore_normal(Vector2::new(0.0, 1.0));
+            block.ignore_normal(Vector2::new(0.0, -1.0));
+        }
+
+        self.tiles.insert(pos, tile);
+
+        println!("tiles: {}", self.tiles.len());
+    }
+
+
+    pub fn add_slab(&mut self, pos: Vector2i) {
+        let w = 64.0;
+        let h = 64.0;
+
+        let x = pos.x as f64 * w;
+        let y = pos.y as f64 * h;
+
+        let mut tile = ConvexHull::from_points(&[
+            Vector2::new(x + w, y),
+            Vector2::new(x + w, y + h),
+            Vector2::new(x, y + h),
+        ]);
+
+        if let Some(block) = self.tiles.get_mut(&[pos.x + 1, pos.y].into()) {
+            tile.ignore_normal(Vector2::new(1.0, 0.0));
+            block.ignore_normal(Vector2::new(-1.0, 0.0));
+        }
+        if let Some(block) = self.tiles.get_mut(&[pos.x, pos.y + 1].into()) {
+            tile.ignore_normal(Vector2::new(0.0, 1.0));
+            block.ignore_normal(Vector2::new(0.0, -1.0));
         }
 
         self.tiles.insert(pos, tile);
@@ -220,61 +261,18 @@ impl TileMap {
 
     pub fn remove_tile(&mut self, pos: Vector2i) {
         self.tiles.remove(&pos);
-
-        if let Some(block) = self.tiles.get_mut(&[pos.x - 1, pos.y].into()) {
-            block.edges[1] = true;
-        }
-        if let Some(block) = self.tiles.get_mut(&[pos.x + 1, pos.y].into()) {
-            block.edges[0] = true;
-        }
-        if let Some(block) = self.tiles.get_mut(&[pos.x, pos.y - 1].into()) {
-            block.edges[3] = true;
-        }
-        if let Some(block) = self.tiles.get_mut(&[pos.x, pos.y + 1].into()) {
-            block.edges[2] = true;
-        }
     }
 
 
     pub fn draw(&self, renderer: &mut Renderer) {
         for (_, obstacle) in self.tiles.iter() {
             renderer.color = [1.0, 0.0, 0.0, 1.0];
-            renderer.fill_rectangle(obstacle.left, obstacle.right, obstacle.top, obstacle.bottom);
+            renderer.fill_convex(obstacle.get_points());
 
-            renderer.color = [0.0, 0.0, 1.0, 1.0];
-            if obstacle.edges[0] {
-                renderer.fill_rectangle(obstacle.left, obstacle.left + 2.0, obstacle.top, obstacle.bottom);
+            renderer.color = [0.0, 1.0, 1.0, 1.0];
+            for line in obstacle.get_normals_as_lines(24.0) {
+                renderer.draw_line(line.0, line.1);
             }
-            if obstacle.edges[1] {
-                renderer.fill_rectangle(obstacle.right - 2.0, obstacle.right, obstacle.top, obstacle.bottom);
-            }
-            if obstacle.edges[2] {
-                renderer.fill_rectangle(obstacle.left, obstacle.right, obstacle.top, obstacle.top + 2.0);
-            }
-            if obstacle.edges[3] {
-                renderer.fill_rectangle(obstacle.left, obstacle.right, obstacle.bottom - 2.0, obstacle.bottom);
-            }
-        }
-    }
-}
-
-impl Collide<AABB> for TileMap {
-    fn overlap(&self, other: &AABB) -> Option<(f64, Vector2)> {
-        let smallest = std::f64::INFINITY;
-        let mut best = None;
-
-        for (_, obstacle) in self.tiles.iter() {
-            if let Some((overlap, resolve)) = obstacle.overlap(other) {
-                if overlap < smallest {
-                    best = Some(resolve);
-                }
-            }
-        }
-
-        if let Some(resolve) = best {
-            Some((smallest, resolve))
-        } else {
-            None
         }
     }
 }

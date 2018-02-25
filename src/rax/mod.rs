@@ -88,6 +88,7 @@ impl GameBuilder {
                 title: "Rax".to_owned(),
                 width: 640,
                 height: 360,
+                fullscreen: false,
                 vsync: true,
                 samples: 4,
             }
@@ -136,6 +137,17 @@ impl GameBuilder {
         GameBuilder {
             window: WindowSettings {
                 width, height,
+                .. self.window
+            },
+            .. self
+        }
+    }
+
+
+    pub fn with_fullscreen(self, fullscreen: bool) -> Self {
+        GameBuilder {
+            window: WindowSettings {
+                fullscreen,
                 .. self.window
             },
             .. self

@@ -1,4 +1,3 @@
-
 use std::collections::HashSet;
 
 use glium;
@@ -23,9 +22,19 @@ impl Window {
         // Create a window with event loop
         let events_loop = glutin::EventsLoop::new();
 
+        let (width, height, monitor) = if settings.fullscreen {
+            let primary = events_loop.get_primary_monitor();
+            let (w, h) = primary.get_dimensions();
+
+            (w, h, Some(primary))
+        } else {
+            (settings.width, settings.height, None)
+        };
+
         let window = glutin::WindowBuilder::new()
             .with_title(settings.title)
-            .with_dimensions(settings.width, settings.height);
+            .with_fullscreen(monitor)
+            .with_dimensions(width, height);
 
         let context = glutin::ContextBuilder::new()
             .with_vsync(settings.vsync)
@@ -58,44 +67,44 @@ impl Window {
         let pressed_keys = &mut self.pressed_keys;
         let cursor_position = &mut self.cursor_position;
 
-        self.events_loop.poll_events(|e|{
+        self.events_loop.poll_events(|e| {
             use glium::glutin::{Event, WindowEvent, ElementState};
             match e {
-                Event::WindowEvent {event, ..} => {
+                Event::WindowEvent { event, .. } => {
                     match event {
                         WindowEvent::Closed => {
                             *open = false;
                             handler.closed();
-                        },
-                        WindowEvent::KeyboardInput {input, ..} => {
+                        }
+                        WindowEvent::KeyboardInput { input, .. } => {
                             if let Some(key) = input.virtual_keycode {
                                 match input.state {
                                     ElementState::Pressed => {
                                         if pressed_keys.insert(key) {
                                             handler.key_pressed(key)
                                         }
-                                    },
+                                    }
                                     ElementState::Released => {
                                         pressed_keys.remove(&key);
                                         handler.key_released(key)
-                                    },
+                                    }
                                 }
                             }
-                        },
+                        }
 
-                        WindowEvent::CursorMoved {position, ..} => {
+                        WindowEvent::CursorMoved { position, .. } => {
                             *cursor_position = (position.0.round() as u64, position.1.round() as u64);
                             handler.mouse_moved(cursor_position.0, cursor_position.1);
                         }
 
-                        WindowEvent::MouseInput {button, state, ..} => {
+                        WindowEvent::MouseInput { button, state, .. } => {
                             match state {
                                 ElementState::Pressed => {
                                     handler.mouse_pressed(button, cursor_position.0, cursor_position.1)
-                                },
+                                }
                                 ElementState::Released => {
                                     handler.mouse_released(button, cursor_position.0, cursor_position.1)
-                                },
+                                }
                             }
                         }
 
@@ -122,9 +131,10 @@ pub struct WindowSettings {
     pub width: u32,
     pub height: u32,
 
+    pub fullscreen: bool,
     pub vsync: bool,
 
-    pub samples: u16
+    pub samples: u16,
 }
 
 
