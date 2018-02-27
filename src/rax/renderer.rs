@@ -9,6 +9,7 @@ pub struct Renderer {
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
 
+    pub center: Vector2,
     view: (f32, f32, f32, f32),
 
     pub color: [f64; 4],
@@ -35,6 +36,7 @@ impl Renderer {
             vertices: Vec::new(),
             indices: Vec::new(),
 
+            center: Vector2::new(0.0, 0.0),
             view: (-1.0, 1.0, 1.0, -1.0),
 
             color: [1.0, 0.0, 0.0, 1.0],
@@ -50,7 +52,10 @@ impl Renderer {
         self.frame = Some(self.display.draw());
 
         if let Some((w, h)) = self.display.gl_window().window().get_inner_size() {
-            self.view = (0.0, w as f32, 0.0, h as f32);
+            let w = w as f32;
+            let h = h as f32;
+            self.view = (-w / 2.0, w / 2.0, -h / 2.0, h / 2.0);
+            self.center = Vector2::new(w as f64 / 2.0, h as f64 / 2.0);
         }
     }
 
@@ -85,7 +90,9 @@ impl Renderer {
                 left: left,
                 right: right,
                 top: top,
-                bottom: bottom
+                bottom: bottom,
+
+                translation: [self.center.x as f32, self.center.y as f32]
             );
 
             frame.draw(&vertex_buffer, &index_buffer, &self.program, &uniforms, &Default::default()).unwrap();

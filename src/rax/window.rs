@@ -76,6 +76,11 @@ impl Window {
                             *open = false;
                             handler.closed();
                         }
+
+                        WindowEvent::Resized(w, h) => {
+                            handler.size_changed(w as u64, h as u64);
+                        }
+
                         WindowEvent::KeyboardInput { input, .. } => {
                             if let Some(key) = input.virtual_keycode {
                                 match input.state {
@@ -156,4 +161,7 @@ pub trait WindowHandler {
 
     /// Called when the cursor has moved
     fn mouse_moved(&mut self, x: u64, y: u64);
+
+    /// Called when the window changes size
+    fn size_changed(&mut self, width: u64, height: u64);
 }

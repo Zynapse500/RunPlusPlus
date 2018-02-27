@@ -7,6 +7,8 @@ uniform float right = 1.0;
 uniform float top = 1.0;
 uniform float bottom = -1.0;
 
+uniform vec2 translation;
+
 out FragData {
     vec2 position;
     vec4 color;
@@ -15,7 +17,7 @@ out FragData {
 void main() {
     vec2 lb = vec2(left, bottom);
     vec2 rt = vec2(right, top);
-    vec2 translated = (position - lb) * 2.0 / (rt - lb) - vec2(1.0);
+    vec2 translated = (position - translation - lb) * 2.0 / (rt - lb) - vec2(1.0);
 	gl_Position = vec4(translated, 0.0, 1.0);
 
 	frag.position = position;

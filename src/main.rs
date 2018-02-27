@@ -31,14 +31,20 @@ fn main() {
 
 struct RunPlusPlus {
     frame_counter: FrameCounter,
+
     time: f64,
+    accumulator: f64,
 
     running: bool,
 
     pressed_keys: HashSet<KeyCode>,
+    window_size: Vector2i,
 
     player: ConvexHull,
     convex: ConvexHull,
+
+    camera_center: Vector2,
+
     ground_normal: Option<Vector2>,
 
     tilemap: TileMap,
@@ -51,11 +57,14 @@ impl rax::Game for RunPlusPlus {
     fn new() -> Self {
         RunPlusPlus {
             frame_counter: FrameCounter::new(),
+
             time: 0.0,
+            accumulator: 0.0,
 
             running: true,
 
             pressed_keys: HashSet::new(),
+            window_size: Vector2i::new(1, 1),
 
             player: ConvexHull::from_points(&[
                 Vector2::new(300.0, 100.0),
@@ -71,6 +80,8 @@ impl rax::Game for RunPlusPlus {
                 Vector2::new(250.0, 300.0),
             ]),
 
+            camera_center: Vector2::new(0.0, 0.0),
+
             ground_normal: None,
 
             tilemap: TileMap::new(),
@@ -80,67 +91,78 @@ impl rax::Game for RunPlusPlus {
     }
 
     fn update(&mut self, dt: f64) {
-        self.time += dt * 2.0;
+        self.time += dt;
+        self.accumulator += dt;
 
-        let mut delta = Vector2::new(0.0, 0.0);
-        if self.pressed_keys.contains(&KeyCode::A) { delta.x -= 1.0; }
-        if self.pressed_keys.contains(&KeyCode::D) { delta.x += 1.0; }
-        if self.pressed_keys.contains(&KeyCode::W) { delta.y -= 1.0; }
-        if self.pressed_keys.contains(&KeyCode::S) { delta.y += 1.0; }
-        if delta.len() != 0.0 { self.velocity += (delta.norm() * 1300.0 * dt); }
+        let target_frame_time = 1.0 / 240.0;
+        while self.accumulator > target_frame_time {
+            let dt = target_frame_time;
+            let mut delta = Vector2::new(0.0, 0.0);
+            if self.pressed_keys.contains(&KeyCode::A) { delta.x -= 1.0; }
+            if self.pressed_keys.contains(&KeyCode::D) { delta.x += 1.0; }
 
-        if self.pressed_keys.contains(&KeyCode::Space) {
-            if let Some(normal) = self.ground_normal {
-                self.velocity += 450.0 * normal;
-            }
-        }
+            if delta.len() != 0.0 { self.velocity += (delta.norm() * 600.0 * dt); }
 
-        if let Some(normal) = self.ground_normal {
-            let dot = normal.dot(&Vector2::new(0.0, -1.0));
-            self.velocity.x -= self.velocity.x * dt * 6.0;
-            self.velocity.y -= self.velocity.y * dt * 4.0;
-        } else {
-            self.velocity.x -= self.velocity.x * dt * 3.0;
-            self.velocity.y -= self.velocity.y * dt * 1.0;
-        }
-
-        self.velocity.y += dt * 1000.0;
-        self.player.translate(self.velocity * dt);
-
-
-        self.ground_normal = None;
-
-        let mut i = 0;
-        loop {
-            let first = {
-                // First, find all overlaps, then find the smallest overlap
-                let obstacles: &[&Collide<ConvexHull>] = &[&self.convex, &self.tilemap];
-                obstacles.into_iter().filter_map(|o| { o.overlap(&self.player) })
-                    .min_by(|a, b| { a.0.partial_cmp(&b.0).unwrap() })
-            };
-
-            if let Some((overlap, resolve)) = first {
-                self.player.translate(-resolve);
-
-                let normal = -resolve.norm();
-
-                if normal.dot(&self.velocity) < 0.0 {
-                    let plane = Vector2::new(normal.y, -normal.x);
-
-                    let dot = plane.dot(&self.velocity);
-                    self.velocity = dot * plane;
-
-                    if normal.dot(&Vector2::new(0.0, -1.0)) > 0.0 {
-                        self.ground_normal = Some(normal);
-                    }
+            if self.pressed_keys.contains(&KeyCode::Space) {
+                if let Some(normal) = self.ground_normal {
+                    self.velocity += 475.0 * normal;
                 }
+            }
 
-                i += 1;
-                if i > 10 {
+            if let Some(normal) = self.ground_normal {
+                let dot = normal.dot(&Vector2::new(0.0, -1.0));
+                self.velocity.x -= self.velocity.x * dt * 6.0;
+                self.velocity.y -= self.velocity.y * dt * 3.0;
+            } else {
+                self.velocity.x -= self.velocity.x * dt * 3.0;
+                self.velocity.y -= self.velocity.y * dt * 1.0;
+            }
+
+            self.velocity.y += dt * 500.0;
+            self.player.translate(self.velocity * dt);
+
+
+            self.ground_normal = None;
+
+            let mut i = 0;
+            loop {
+                let first = {
+                    // First, find all overlaps, then find the smallest overlap
+                    let obstacles: &[&Collide<ConvexHull>] = &[&self.convex, &self.tilemap];
+                    obstacles.into_iter().filter_map(|o| { o.overlap(&self.player) })
+                        .min_by(|a, b| { a.0.partial_cmp(&b.0).unwrap() })
+                };
+
+                if let Some((overlap, resolve)) = first {
+                    self.player.translate(-resolve);
+
+                    let normal = -resolve.norm();
+
+                    if normal.dot(&self.velocity) < 0.0 {
+                        let plane = Vector2::new(normal.y, -normal.x);
+
+                        let dot = plane.dot(&self.velocity);
+                        self.velocity = dot * plane;
+
+                        if normal.dot(&Vector2::new(0.0, -1.0)) > 0.0 {
+                            self.ground_normal = Some(normal);
+                        }
+                    }
+
+                    i += 1;
+                    if i > 10 {
+                        break;
+                    }
+                } else {
                     break;
                 }
-            } else {
-                break;
+            }
+
+            self.camera_center += (self.player.average() - self.camera_center) * dt * 4.0;
+
+            self.accumulator -= target_frame_time;
+            if self.accumulator > 1.0 {
+                self.accumulator = 0.0;
             }
         }
     }
@@ -149,6 +171,8 @@ impl rax::Game for RunPlusPlus {
         if let Some(fps) = self.frame_counter.tick() {
             println!("FPS: {}", fps.round());
         }
+
+        renderer.center = self.camera_center;
 
         renderer.clear(0.2, 0.2, 0.2);
 
@@ -193,8 +217,11 @@ impl rax::Game for RunPlusPlus {
         let w = 64.0;
         let h = 64.0;
 
-        let bx = (x as f64 / w).floor() as i64;
-        let by = (y as f64 / h).floor() as i64;
+        let world_x = x as f64 + self.camera_center.x - self.window_size.x as f64 / 2.0;
+        let world_y = y as f64 + self.camera_center.y - self.window_size.y as f64 / 2.0;
+
+        let bx = (world_x / w).floor() as i64;
+        let by = (world_y / h).floor() as i64;
 
         if button == MouseButton::Left {
             if self.pressed_keys.contains(&KeyCode::Key1) {
@@ -212,13 +239,17 @@ impl rax::Game for RunPlusPlus {
             self.tilemap.remove_tile([bx, by].into())
         }
     }
+
+
+    fn on_size_change(&mut self, width: u64, height: u64) {
+        self.window_size = Vector2i::new(width as i64, height as i64);
+    }
 }
 
 
 struct TileMap {
     tiles: HashMap<Vector2i, (Tile, ConvexHull)>,
     player_start: Vector2i,
-
     tile_size: f64,
 }
 
@@ -227,7 +258,6 @@ impl TileMap {
         TileMap {
             tiles: HashMap::new(),
             player_start: Vector2i::new(2, 2),
-
             tile_size: 64.0,
         }
     }
@@ -313,9 +343,9 @@ impl Collide<ConvexHull> for TileMap {
         let bounding_box = other.bounding_box();
 
         for (_, &(_, ref obstacle)) in self.tiles.iter() {
-            // Broad phase
+// Broad phase
             if bounding_box.intersects(&obstacle.bounding_box()) {
-                // Narrow phase
+// Narrow phase
                 if let Some((overlap, resolve)) = obstacle.overlap(other) {
                     if overlap < smallest {
                         best = Some(resolve);
@@ -333,7 +363,6 @@ impl Collide<ConvexHull> for TileMap {
 }
 
 
-
 #[derive(Copy, Clone)]
 enum Tile {
     Square,
@@ -349,7 +378,7 @@ enum Direction {
     Up,
     Down,
     Left,
-    Right
+    Right,
 }
 
 impl Direction {
@@ -477,7 +506,6 @@ impl Bounded for TileMap {
         }
     }
 }
-
 
 
 use std::time::Instant;

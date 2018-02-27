@@ -47,6 +47,9 @@ pub trait Game {
 
     /// Called when the mouse moved
     fn on_mouse_move(&mut self, x: u64, y: u64) {}
+
+    /// Called when the window changes size
+    fn on_size_change(&mut self, width: u64, height: u64) {}
 }
 
 
@@ -73,6 +76,10 @@ impl<T: Game> WindowHandler for T {
 
     fn mouse_moved(&mut self, x: u64, y: u64) {
         self.on_mouse_move(x, y);
+    }
+
+    fn size_changed(&mut self, width: u64, height: u64) {
+        self.on_size_change(width, height);
     }
 }
 

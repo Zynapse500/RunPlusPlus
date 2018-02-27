@@ -58,6 +58,18 @@ impl ConvexHull {
         self.points.as_slice()
     }
 
+
+    /// Return the average of all points of this hull
+    pub fn average(&self) -> Vector2 {
+        let mut sum = Vector2::new(0.0, 0.0);
+        for point in self.points.iter() {
+            sum += *point;
+        }
+
+        sum / self.points.len() as f64
+    }
+
+
     /// Return the normals of this hull as lines
     pub fn get_normals_as_lines(&self, length: f64) -> Vec<(Vector2, Vector2)> {
         let mut lines = Vec::new();
