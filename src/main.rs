@@ -43,9 +43,10 @@ struct RunPlusPlus {
     player: ConvexHull,
     convex: ConvexHull,
 
-    camera_center: Vector2,
-
     ground_normal: Option<Vector2>,
+    wall_normal: Option<Vector2>,
+
+    camera_center: Vector2,
 
     tilemap: TileMap,
 
@@ -73,16 +74,17 @@ impl rax::Game for RunPlusPlus {
                 Vector2::new(300.0, 150.0),
             ]),
             convex: ConvexHull::from_points(&[
-                Vector2::new(300.0, 200.0),
-                Vector2::new(500.0, 250.0),
-                Vector2::new(400.0, 400.0),
-                Vector2::new(300.0, 450.0),
-                Vector2::new(250.0, 300.0),
+                Vector2::new(300.0, 200.0 + 200.0),
+                Vector2::new(500.0, 200.0 + 250.0),
+                Vector2::new(400.0, 200.0 + 400.0),
+                Vector2::new(300.0, 200.0 + 450.0),
+                Vector2::new(250.0, 200.0 + 300.0),
             ]),
 
-            camera_center: Vector2::new(0.0, 0.0),
-
             ground_normal: None,
+            wall_normal: None,
+
+            camera_center: Vector2::new(0.0, 0.0),
 
             tilemap: TileMap::new(),
 
@@ -98,32 +100,44 @@ impl rax::Game for RunPlusPlus {
         while self.accumulator > target_frame_time {
             let dt = target_frame_time;
             let mut delta = Vector2::new(0.0, 0.0);
-            if self.pressed_keys.contains(&KeyCode::A) { delta.x -= 1.0; }
-            if self.pressed_keys.contains(&KeyCode::D) { delta.x += 1.0; }
 
-            if delta.len() != 0.0 { self.velocity += (delta.norm() * 600.0 * dt); }
+            let plane = if let Some(normal) = self.ground_normal {
+                Vector2::new(-normal.y, normal.x)
+            } else {
+                Vector2::new(1.0, 0.0)
+            };
 
-            if self.pressed_keys.contains(&KeyCode::Space) {
-                if let Some(normal) = self.ground_normal {
-                    self.velocity += 475.0 * normal;
+            if self.wall_normal.is_none() {
+                if self.pressed_keys.contains(&KeyCode::A) { delta -= plane; }
+                if self.pressed_keys.contains(&KeyCode::D) { delta += plane; }
+            }
+
+            if delta.len() != 0.0 { self.velocity += (delta.norm() * 300.0 * dt); }
+
+
+            self.velocity.x -= self.velocity.x * dt * 1.0;
+            self.velocity.y -= self.velocity.y * dt * 1.0;
+
+            if let Some(normal) = self.wall_normal {
+                let dot = normal.dot(&Vector2::new(-1.0, 0.0));
+                if dot < -0.95 ||
+                    dot > 0.95 {
+                    println!("Wall!!");
+                    if self.velocity.y > 0.0 {
+                        self.velocity.y -= self.velocity.y * dt * 9.0;
+                    }
                 }
             }
 
-            if let Some(normal) = self.ground_normal {
-                let dot = normal.dot(&Vector2::new(0.0, -1.0));
-                self.velocity.x -= self.velocity.x * dt * 6.0;
-                self.velocity.y -= self.velocity.y * dt * 3.0;
+            if self.velocity.y > 0.0 {
+                self.velocity.y += 400.0 * dt;
             } else {
-                self.velocity.x -= self.velocity.x * dt * 3.0;
-                self.velocity.y -= self.velocity.y * dt * 1.0;
+                self.velocity.y += 200.0 * dt;
             }
 
-            self.velocity.y += dt * 500.0;
             self.player.translate(self.velocity * dt);
 
-
             self.ground_normal = None;
-
             let mut i = 0;
             loop {
                 let first = {
@@ -143,10 +157,15 @@ impl rax::Game for RunPlusPlus {
 
                         let dot = plane.dot(&self.velocity);
                         self.velocity = dot * plane;
+                    }
 
-                        if normal.dot(&Vector2::new(0.0, -1.0)) > 0.0 {
-                            self.ground_normal = Some(normal);
-                        }
+                    if normal.dot(&Vector2::new(0.0, -1.0)) > 0.5 {
+                        self.ground_normal = Some(normal);
+                    }
+
+                    let dot = normal.dot(&Vector2::new(0.0, -1.0));
+                    if dot < 0.05 && dot > -0.05 {
+                        self.wall_normal = Some(normal);
                     }
 
                     i += 1;
@@ -156,6 +175,10 @@ impl rax::Game for RunPlusPlus {
                 } else {
                     break;
                 }
+            }
+
+            if self.velocity.x != 0.0 {
+                self.wall_normal = None;
             }
 
             self.camera_center += (self.player.average() - self.camera_center) * dt * 4.0;
@@ -176,10 +199,15 @@ impl rax::Game for RunPlusPlus {
 
         renderer.clear(0.2, 0.2, 0.2);
 
-        self.tilemap.draw(renderer);
-
         renderer.color = [0.0, 1.0, 0.0, 1.0];
         renderer.fill_convex(self.convex.get_points());
+
+
+
+        renderer.color = [0.03, 0.03, 0.03, 1.0];
+        self.tilemap.draw_shadows(renderer, self.player.average());
+
+        self.tilemap.draw(renderer);
 
         renderer.color = [0.0, 0.0, 1.0, 1.0];
         renderer.fill_convex(self.player.get_points());
@@ -201,6 +229,19 @@ impl rax::Game for RunPlusPlus {
                     Vector2::new(300.0, 150.0),
                 ]);
                 self.velocity = Vector2::new(0.0, 0.0);
+            }
+
+            KeyCode::Space => {
+                if let Some(normal) = self.ground_normal {
+                    self.velocity += normal * 250.0;
+                } else if let Some(normal) = self.wall_normal {
+                    self.velocity += (normal + Vector2::new(0.0, -1.5)).norm() * 250.0;
+                }
+                self.wall_normal = None;
+            }
+
+            KeyCode::S => {
+                self.wall_normal = None;
             }
 
             _ => ()
@@ -323,12 +364,34 @@ impl TileMap {
 
     pub fn draw(&self, renderer: &mut Renderer) {
         for (_, &(_, ref obstacle)) in self.tiles.iter() {
-            renderer.color = [1.0, 0.0, 0.0, 1.0];
+            renderer.color = [1.0, 0.0, 0.0, 0.2];
             renderer.fill_convex(obstacle.get_points());
+        }
 
-            renderer.color = [0.0, 1.0, 1.0, 1.0];
+        for (_, &(_, ref obstacle)) in self.tiles.iter() {
+            renderer.color = [0.0, 1.0, 1.0, 0.2];
             for line in obstacle.get_normals_as_lines(24.0) {
                 renderer.draw_line(line.0, line.1);
+            }
+        }
+    }
+
+
+    pub fn draw_shadows(&self, renderer: &mut Renderer, center: Vector2) {
+        for (_, &(_, ref obstacle)) in self.tiles.iter() {
+            let points = obstacle.get_points();
+
+            for i in 0..points.len() {
+                let a = points[i];
+                let b = points[(i + 1) % points.len()];
+
+                let mid = (a + b) / 2.0;
+
+                let a_far = a + (a - center).norm() * 3000.0;
+                let b_far = b + (b - center).norm() * 3000.0;
+                let mid_far = mid + (mid - center).norm() * 3000.0;
+
+                renderer.fill_convex(&[a, a_far, mid_far, b_far, b]);
             }
         }
     }

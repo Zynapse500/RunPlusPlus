@@ -95,7 +95,16 @@ impl Renderer {
                 translation: [self.center.x as f32, self.center.y as f32]
             );
 
-            frame.draw(&vertex_buffer, &index_buffer, &self.program, &uniforms, &Default::default()).unwrap();
+            let parameters = glium::DrawParameters {
+                blend: glium::Blend {
+                    color: glium::BlendingFunction::Addition { source: glium::LinearBlendingFactor::SourceAlpha, destination: glium::LinearBlendingFactor::OneMinusSourceAlpha },
+                    alpha: glium::BlendingFunction::AlwaysReplace,
+                    constant_value: (1.0, 1.0, 1.0, 1.0),
+                }
+                , .. Default::default()
+            };
+
+            frame.draw(&vertex_buffer, &index_buffer, &self.program, &uniforms, &parameters).unwrap();
 
             self.vertices.clear();
             self.indices.clear();
