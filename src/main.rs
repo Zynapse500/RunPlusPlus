@@ -266,14 +266,17 @@ impl rax::Game for RunPlusPlus {
             {
                 let mut hip = mid;
 
-                let (mut contact_left, mut contact_right) = if let Some(normal) = self.wall_normal {
+                let (mut contact_leg_left, mut contact_leg_right, mut contact_arm_left, mut contact_arm_right) = if let Some(normal) = self.wall_normal {
                     let x = mid.x - normal.x * size.x / 2.0;
 
                     hip.x = mid.x - normal.x * size.x / 4.0;
 
                     (
                         Vector2::new(x, bottom - size.y / 5.0),
-                        Vector2::new(x, bottom)
+                        Vector2::new(x, bottom),
+
+                        Vector2::new(x, top + size.y / 3.0),
+                        Vector2::new(x, top + size.y / 2.0),
                     )
                 } else if let Some(normal) = self.ground_normal {
                     let angle = (hip.x / size.x * 1.0).sin() / 3.0;
@@ -286,17 +289,24 @@ impl rax::Game for RunPlusPlus {
 
                     (
                         Vector2::new(left_x, bottom + (contact_x - left_x) * slope),
-                        Vector2::new(right_x, bottom + (contact_x - right_x) * slope)
+                        Vector2::new(right_x, bottom + (contact_x - right_x) * slope),
+
+                        Vector2::new(mid.x + angle * size.x / 2.0, mid.y),
+                        Vector2::new(mid.x - angle * size.x / 2.0, mid.y),
                     )
                 } else {
                     let x = hip.x - self.velocity.x * size.x / 2.0 / 250.0;
                     (
                         Vector2::new(x, bottom - size.y / 5.0),
-                        Vector2::new(x, bottom)
+                        Vector2::new(x, bottom),
+
+                        Vector2::new(x + size.x / 3.0,  mid.y - size.y / 5.0),
+                        Vector2::new(x - size.x / 3.0, mid.y),
                     )
                 };
 
                 let leg_length = size.y / 1.5;
+                let arm_length = size.y / 3.0;
 
                 let joint = |contact: &mut Vector2| {
                     let delta = hip - *contact;
@@ -327,19 +337,29 @@ impl rax::Game for RunPlusPlus {
                     }
                 };
 
-                let joint_left = joint(&mut contact_left);
-                let joint_right = joint(&mut contact_right);
+                let leg_joint_left = joint(&mut contact_leg_left);
+                let leg_joint_right = joint(&mut contact_leg_right);
+                let arm_joint_left = joint(&mut contact_arm_left);
+                let arm_joint_right = joint(&mut contact_arm_right);
 
-                // Thighs
-                renderer.draw_line(hip, joint_left);
-                renderer.draw_line(hip, joint_right);
+                // Legs
+                renderer.draw_line(hip, leg_joint_left);
+                renderer.draw_line(hip, leg_joint_right);
 
-                // Thighs
-                renderer.draw_line(joint_left, contact_left);
-                renderer.draw_line(joint_right, contact_right);
+                renderer.draw_line(leg_joint_left, contact_leg_left);
+                renderer.draw_line(leg_joint_right, contact_leg_right);
+
+                let upper = Vector2::new(mid.x, mid.y - size.y / 4.0);
+
+                // Arms
+                /*renderer.draw_line(upper, arm_joint_left);
+                renderer.draw_line(upper, arm_joint_right);
+
+                renderer.draw_line(arm_joint_left, contact_arm_left);
+                renderer.draw_line(arm_joint_right, contact_arm_right);*/
 
                 // Chest
-                renderer.draw_line(Vector2::new(mid.x, mid.y - size.y / 4.0), Vector2::new(hip.x, hip.y));
+                renderer.draw_line(upper, Vector2::new(hip.x, hip.y));
             }
         }
     }
