@@ -23,7 +23,7 @@ fn main() {
         .with_size(1280, 720)
         .with_fullscreen(true)
         .with_vsync(false)
-        .with_samples(8);
+        .with_samples(1);
 
     game.run::<RunPlusPlus>();
 }
@@ -116,7 +116,7 @@ impl rax::Game for RunPlusPlus {
                 if self.pressed_keys.contains(&KeyCode::D) { delta += plane; }
             }
 
-            if delta.len() != 0.0 { self.velocity += (delta.norm() * 300.0 * dt); }
+            if delta.len() != 0.0 { self.velocity += (delta.norm() * 300.0 * dt * if self.ground_normal.is_some() {1.0} else {0.75}); }
 
 
             self.velocity.x -= self.velocity.x * dt * 1.0;
@@ -246,8 +246,102 @@ impl rax::Game for RunPlusPlus {
 
         self.tilemap.draw(renderer);
 
-        renderer.color = [0.0, 0.0, 1.0, 1.0];
-        renderer.fill_convex(self.player.get_points());
+        {
+            renderer.color = [0.0, 0.0, 1.0, 0.3];
+            renderer.fill_convex(self.player.get_points());
+
+            let bounds = self.player.bounding_box();
+            let left = bounds.left;
+            let right = bounds.right;
+            let top = bounds.top;
+            let bottom = bounds.bottom;
+
+            let mid = Vector2::new((left + right) / 2.0, (top + bottom) / 2.0);
+            let size = Vector2::new(right - left, bottom - top);
+
+            renderer.color = [1.0, 1.0, 1.0, 1.0];
+            renderer.line_width = 4.0;
+
+            // Legs
+            {
+                let mut hip = mid;
+
+                let (mut contact_left, mut contact_right) = if let Some(normal) = self.wall_normal {
+                    let x = mid.x - normal.x * size.x / 2.0;
+
+                    hip.x = mid.x - normal.x * size.x / 4.0;
+
+                    (
+                        Vector2::new(x, bottom - size.y / 5.0),
+                        Vector2::new(x, bottom)
+                    )
+                } else if let Some(normal) = self.ground_normal {
+                    let angle = (hip.x / size.x * 1.0).sin() / 3.0;
+                    let contact_x = if normal.x < 0.0 { right } else { left };
+
+                    let left_x = hip.x + angle * size.x;
+                    let right_x = hip.x - angle * size.x;
+
+                    let slope = normal.x / normal.y;
+
+                    (
+                        Vector2::new(left_x, bottom + (contact_x - left_x) * slope),
+                        Vector2::new(right_x, bottom + (contact_x - right_x) * slope)
+                    )
+                } else {
+                    let x = hip.x - self.velocity.x * size.x / 2.0 / 250.0;
+                    (
+                        Vector2::new(x, bottom - size.y / 5.0),
+                        Vector2::new(x, bottom)
+                    )
+                };
+
+                let leg_length = size.y / 1.5;
+
+                let joint = |contact: &mut Vector2| {
+                    let delta = hip - *contact;
+                    let distance = delta.len();
+                    let discriminant = (leg_length / 2.0).powi(2) - (distance / 2.0).powi(2);
+                    let middle = (hip + *contact) / 2.0;
+                    if discriminant < 0.0 {
+                        *contact = hip + (*contact - middle).norm() * leg_length;
+                        middle
+                    } else {
+                        let advance = discriminant.sqrt();
+                        let direction = if self.velocity.x < 0.0 {
+                            -1.0
+                        } else if self.velocity.x > 0.0 {
+                            1.0
+                        } else {
+                            if let Some(normal) = self.wall_normal {
+                                if normal.x > 0.0 {
+                                    1.0
+                                } else {
+                                    -1.0
+                                }
+                            } else {
+                                0.5
+                            }
+                        };
+                        middle + Vector2::new(-delta.y, delta.x).norm() * advance * direction
+                    }
+                };
+
+                let joint_left = joint(&mut contact_left);
+                let joint_right = joint(&mut contact_right);
+
+                // Thighs
+                renderer.draw_line(hip, joint_left);
+                renderer.draw_line(hip, joint_right);
+
+                // Thighs
+                renderer.draw_line(joint_left, contact_left);
+                renderer.draw_line(joint_right, contact_right);
+
+                // Chest
+                renderer.draw_line(Vector2::new(mid.x, mid.y - size.y / 4.0), Vector2::new(hip.x, hip.y));
+            }
+        }
     }
 
     fn is_running(&self) -> bool {
