@@ -46,6 +46,8 @@ struct RunPlusPlus {
     ground_normal: Option<Vector2>,
     wall_normal: Option<Vector2>,
 
+    jumping: bool,
+
     camera_center: Vector2,
 
     tilemap: TileMap,
@@ -84,6 +86,8 @@ impl rax::Game for RunPlusPlus {
             ground_normal: None,
             wall_normal: None,
 
+            jumping: false,
+
             camera_center: Vector2::new(0.0, 0.0),
 
             tilemap: TileMap::new(),
@@ -116,16 +120,27 @@ impl rax::Game for RunPlusPlus {
 
 
             self.velocity.x -= self.velocity.x * dt * 1.0;
-            self.velocity.y -= self.velocity.y * dt * 1.0;
+            self.velocity.y -= self.velocity.y * dt * 0.5;
 
             if let Some(normal) = self.wall_normal {
                 let dot = normal.dot(&Vector2::new(-1.0, 0.0));
                 if dot < -0.95 ||
                     dot > 0.95 {
-                    println!("Wall!!");
                     if self.velocity.y > 0.0 {
                         self.velocity.y -= self.velocity.y * dt * 9.0;
                     }
+                }
+            }
+
+            if self.jumping {
+                if let Some(normal) = self.ground_normal {
+                    self.velocity += normal * 250.0;
+                    self.jumping = false;
+                    self.wall_normal = None;
+                } else if let Some(normal) = self.wall_normal {
+                    self.velocity += (normal + Vector2::new(0.0, -1.5)).norm() * 250.0;
+                    self.jumping = false;
+                    self.wall_normal = None;
                 }
             }
 
@@ -161,11 +176,12 @@ impl rax::Game for RunPlusPlus {
 
                     if normal.dot(&Vector2::new(0.0, -1.0)) > 0.5 {
                         self.ground_normal = Some(normal);
-                    }
-
-                    let dot = normal.dot(&Vector2::new(0.0, -1.0));
-                    if dot < 0.05 && dot > -0.05 {
-                        self.wall_normal = Some(normal);
+                        self.wall_normal = None;
+                    } else {
+                        let dot = normal.dot(&Vector2::new(0.0, -1.0));
+                        if dot < 0.05 && dot > -0.05 {
+                            self.wall_normal = Some(normal);
+                        }
                     }
 
                     i += 1;
@@ -177,9 +193,31 @@ impl rax::Game for RunPlusPlus {
                 }
             }
 
-            if self.velocity.x != 0.0 {
-                self.wall_normal = None;
+
+            if let Some(normal) = self.wall_normal {
+                let delta = -normal;
+                self.player.translate(delta);
+                let first = {
+                    // First, find all overlaps, then find the smallest overlap
+                    let obstacles: &[&Collide<ConvexHull>] = &[&self.convex, &self.tilemap];
+                    obstacles.into_iter().filter_map(|o| { o.overlap(&self.player) })
+                        .min_by(|a, b| { a.0.partial_cmp(&b.0).unwrap() })
+                };
+                self.player.translate(-delta);
+
+                if let Some((_, resolve)) = first {
+                    if resolve == normal {
+                        self.wall_normal = None;
+                    }
+                } else {
+                    self.wall_normal = None;
+                }
+
+                if self.pressed_keys.contains(&KeyCode::S) {
+                    self.wall_normal = None;
+                }
             }
+
 
             self.camera_center += (self.player.average() - self.camera_center) * dt * 4.0;
 
@@ -195,13 +233,12 @@ impl rax::Game for RunPlusPlus {
             println!("FPS: {}", fps.round());
         }
 
-        renderer.center = self.camera_center;
+        renderer.set_center(self.camera_center);
 
         renderer.clear(0.2, 0.2, 0.2);
 
         renderer.color = [0.0, 1.0, 0.0, 1.0];
         renderer.fill_convex(self.convex.get_points());
-
 
 
         renderer.color = [0.03, 0.03, 0.03, 1.0];
@@ -231,14 +268,7 @@ impl rax::Game for RunPlusPlus {
                 self.velocity = Vector2::new(0.0, 0.0);
             }
 
-            KeyCode::Space => {
-                if let Some(normal) = self.ground_normal {
-                    self.velocity += normal * 250.0;
-                } else if let Some(normal) = self.wall_normal {
-                    self.velocity += (normal + Vector2::new(0.0, -1.5)).norm() * 250.0;
-                }
-                self.wall_normal = None;
-            }
+            KeyCode::Space => self.jumping = true,
 
             KeyCode::S => {
                 self.wall_normal = None;
@@ -252,6 +282,12 @@ impl rax::Game for RunPlusPlus {
 
     fn on_key_release(&mut self, key: KeyCode) {
         self.pressed_keys.remove(&key);
+
+        match key {
+            KeyCode::Space => self.jumping = false,
+
+            _ => ()
+        }
     }
 
     fn on_mouse_press(&mut self, button: MouseButton, x: u64, y: u64) {
