@@ -1,5 +1,6 @@
 use trap::Vector2;
 
+
 #[derive(Clone)]
 pub struct AABB {
     pub left: f64,

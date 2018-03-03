@@ -1,5 +1,3 @@
-use glium;
-
 use std::time::Instant;
 
 mod window;
@@ -8,6 +6,8 @@ pub use self::window::{KeyCode, MouseButton};
 
 mod renderer;
 pub use self::renderer::Renderer;
+
+pub mod collision;
 
 
 pub trait Game {
@@ -33,22 +33,28 @@ pub trait Game {
 
 
     /// Called when a key is pressed
+    #[allow(unused_variables)]
     fn on_key_press(&mut self, key: KeyCode) {}
 
     /// Called when a key is released
+    #[allow(unused_variables)]
     fn on_key_release(&mut self, key: KeyCode) {}
 
 
     /// Called when a mouse button is pressed
+    #[allow(unused_variables)]
     fn on_mouse_press(&mut self, button: MouseButton, x: u64, y: u64) {}
 
     /// Called when a mouse button is released
+    #[allow(unused_variables)]
     fn on_mouse_release(&mut self, button: MouseButton, x: u64, y: u64) {}
 
     /// Called when the mouse moved
+    #[allow(unused_variables)]
     fn on_mouse_move(&mut self, x: u64, y: u64) {}
 
     /// Called when the window changes size
+    #[allow(unused_variables)]
     fn on_size_change(&mut self, width: u64, height: u64) {}
 }
 
