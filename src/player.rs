@@ -8,6 +8,7 @@ pub struct Player {
 
     velocity: Vector2,
     move_direction: Option<MoveDirection>,
+    face_direction: MoveDirection,
 
     ground_normal: Option<Vector2>,
     wall_normal: Option<Vector2>,
@@ -51,6 +52,7 @@ impl Player {
 
             velocity: Vector2 { x: 0.0, y: 0.0 },
             move_direction: None,
+            face_direction: MoveDirection::Right,
 
             ground_normal: None,
             wall_normal: None,
@@ -267,6 +269,7 @@ impl Player {
 
             if self.move_direction.is_none() {
                 self.move_direction = Some(direction);
+                self.face_direction = direction;
             } else if let Some(dir) = self.move_direction.clone() {
                 if dir != direction {
                     self.move_direction = None;
@@ -314,7 +317,15 @@ impl Player {
         // Slide
         if normal.dot(self.velocity) < 0.0 {
             let plane = Vector2::new(normal.y, -normal.x);
-            self.velocity = plane * plane.dot(self.velocity);
+
+            let v_dot = normal.dot(-self.velocity.norm());
+            let dot = plane.dot(self.velocity.norm());
+
+            self.velocity = if v_dot <= (50.0 as f64).cos() && self.move_direction.is_some() {
+                plane * self.velocity.len() * if dot > 0.0 {dot.sqrt()} else {-(-dot).sqrt()}
+            } else {
+                plane * plane.dot(self.velocity)
+            }
         }
 
 

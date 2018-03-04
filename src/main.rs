@@ -56,7 +56,7 @@ struct RunPlusPlus {
 
 impl rax::Game for RunPlusPlus {
     fn new() -> Self {
-        let tile_map = if let Some(tile_map) = TileMap::open("levels/tmp.lvl", 64.0) {
+        let tile_map = if let Some(tile_map) = TileMap::open("levels/tmp.lvl", 48.0) {
             println!("Loaded map!");
             tile_map
         } else {
