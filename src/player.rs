@@ -7,6 +7,7 @@ pub struct Player {
     collision: ConvexHull,
 
     velocity: Vector2,
+    move_direction: Option<MoveDirection>,
 
     ground_normal: Option<Vector2>,
     wall_normal: Option<Vector2>,
@@ -29,7 +30,7 @@ pub enum PlayerCommand {
 }
 
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Copy, Clone)]
 enum MoveDirection {
     Left,
     Right,
@@ -49,6 +50,7 @@ impl Player {
             ]),
 
             velocity: Vector2 { x: 0.0, y: 0.0 },
+            move_direction: None,
 
             ground_normal: None,
             wall_normal: None,
@@ -67,7 +69,7 @@ impl Player {
         self.velocity.y -= self.velocity.y * dt * 0.5;
 
         if let Some(normal) = self.wall_normal {
-            let dot = normal.dot(&Vector2::new(-1.0, 0.0));
+            let dot = normal.dot(Vector2::new(-1.0, 0.0));
             if dot < -0.95 ||
                 dot > 0.95 {
                 if self.velocity.y > 0.0 {
@@ -94,9 +96,11 @@ impl Player {
             self.velocity.y += 200.0 * dt;
         }
 
-        self.collision.translate(self.velocity * dt);
+        let amount = self.velocity * dt;
+        self.translate(amount);
 
         self.check_collisions(obstacles);
+
     }
 
 
@@ -224,8 +228,16 @@ impl Player {
     }
 
 
+    /// Translate the player
+    pub fn translate(&mut self, amount: Vector2) {
+        self.collision.translate(amount);
+    }
+
+
     /// Handle any commands
     fn handle_commands(&mut self, dt: f64) {
+        self.move_direction = None;
+
         let commands = self.commands.clone();
         for command in commands {
             match command {
@@ -252,6 +264,14 @@ impl Player {
             let delta = if direction == MoveDirection::Left { -plane } else { plane };
 
             self.velocity += delta * 300.0 * dt * if self.ground_normal.is_some() { 1.0 } else { 0.75 };
+
+            if self.move_direction.is_none() {
+                self.move_direction = Some(direction);
+            } else if let Some(dir) = self.move_direction.clone() {
+                if dir != direction {
+                    self.move_direction = None;
+                }
+            }
         }
     }
 
@@ -259,6 +279,7 @@ impl Player {
     /// Check for and resolve any collisions
     fn check_collisions(&mut self, obstacles: &[&Collide<ConvexHull>]) {
         self.ground_normal = None;
+
         let mut i = 0;
         loop {
             let first = {
@@ -267,31 +288,8 @@ impl Player {
                     .min_by(|a, b| { a.0.partial_cmp(&b.0).unwrap() })
             };
 
-            if let Some((_, resolve)) = first {
-                self.collision.translate(-resolve);
-
-                let normal = -resolve.norm();
-
-                // Slide
-                if normal.dot(&self.velocity) < 0.0 {
-                    let plane = Vector2::new(normal.y, -normal.x);
-
-                    let dot = plane.dot(&self.velocity);
-                    self.velocity = dot * plane;
-                }
-
-
-                // Check if grounded or wall sliding
-                if normal.dot(&Vector2::new(0.0, -1.0)) > 0.5 {
-                    self.ground_normal = Some(normal);
-                    self.wall_normal = None;
-                } else {
-                    let dot = normal.dot(&Vector2::new(0.0, -1.0));
-                    if dot < 0.05 && dot > -0.05 {
-                        self.wall_normal = Some(normal);
-                    }
-                }
-
+            if let Some(overlap) = first {
+                self.resolve_overlap(overlap);
                 i += 1;
                 if i > 100 {
                     break;
@@ -302,16 +300,47 @@ impl Player {
         }
 
 
-        // Check if climbing wall
+        self.check_wall_climb(obstacles);
+    }
+
+    /// Resolves an overlap
+    fn resolve_overlap(&mut self, overlap: (f64, Vector2)) {
+        let (_, resolve) = overlap;
+
+        self.translate(-resolve);
+
+        let normal = -resolve.norm();
+
+        // Slide
+        if normal.dot(self.velocity) < 0.0 {
+            let plane = Vector2::new(normal.y, -normal.x);
+            self.velocity = plane * plane.dot(self.velocity);
+        }
+
+
+        // Check if grounded or wall sliding
+        if normal.dot(Vector2::new(0.0, -1.0)) > 0.5 {
+            self.ground_normal = Some(normal);
+            self.wall_normal = None;
+        } else {
+            let dot = normal.dot(Vector2::new(0.0, -1.0));
+            if dot < 0.05 && dot > -0.05 {
+                self.wall_normal = Some(normal);
+            }
+        }
+    }
+
+
+    fn check_wall_climb(&mut self, obstacles: &[&Collide<ConvexHull>]) {
         if let Some(normal) = self.wall_normal {
             let delta = -normal;
-            self.collision.translate(delta);
+            self.translate(delta);
             let first = {
                 // First, find all overlaps, then find the smallest overlap
                 obstacles.iter().filter_map(|o| { o.overlap(&self.collision) })
                     .min_by(|a, b| { a.0.partial_cmp(&b.0).unwrap() })
             };
-            self.collision.translate(-delta);
+            self.translate(-delta);
 
             if let Some((_, resolve)) = first {
                 if resolve == normal {

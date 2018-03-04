@@ -191,7 +191,7 @@ fn projected_range(points: &[Vector2], axis: Vector2) -> (f64, f64) {
     let mut max = None;
 
     for point in points {
-        let projection = axis.dot(point);
+        let projection = axis.dot(*point);
         if min.is_none() {
             min = Some(projection);
         } else {

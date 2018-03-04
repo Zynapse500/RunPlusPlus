@@ -1,18 +1,25 @@
 use std;
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::path::Path;
+
 use trap::{Vector2, Vector2i};
 
 use rax::collision::*;
-use rax::{Renderer};
+use rax::Renderer;
+
+use player::Player;
 
 pub struct TileMap {
     tiles: HashMap<Vector2i, (Tile, ConvexHull)>,
     tile_size: f64,
+
+    player_start: Vector2i,
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Tile {
     Square,
     WedgeUpLeft,
@@ -32,14 +39,143 @@ pub enum Direction {
 
 
 impl TileMap {
-    pub fn new() -> TileMap {
+    /// Create a new tile map
+    pub fn new(tile_size: f64) -> TileMap {
         TileMap {
             tiles: HashMap::new(),
-            tile_size: 64.0,
+            tile_size,
+
+            player_start: Vector2i::new(0, 0),
         }
     }
 
 
+    /// Open a tile map from disk
+    pub fn open<P: AsRef<Path>>(path: P, tile_size: f64) -> Option<TileMap> {
+        if let Ok(mut file) = File::open(path) {
+            use std::io::Read;
+
+            let mut string = String::new();
+            if file.read_to_string(&mut string).is_err() {
+                return None;
+            }
+
+            return TileMap::from_str(&string, tile_size);
+        } else {
+            None
+        }
+    }
+
+
+    /// Save a tile map to disk
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), std::io::Error> {
+        match std::fs::OpenOptions::new().create(true).write(true).open(path) {
+            Ok(mut file) => {
+                use std::io::Write;
+                let mut text = format!("PLAYER_START {} {}", self.player_start.x, self.player_start.y);
+
+                let mut tiles: HashMap<Tile, Vec<Vector2i>> = HashMap::new();
+                for (position, tile) in self.tiles.iter() {
+                    if let Some(ref mut positions) = tiles.get_mut(&tile.0) {
+                        positions.push(*position);
+                        continue;
+                    }
+
+                    tiles.insert(tile.0, vec![*position]);
+                }
+
+                for (tile, positions) in tiles {
+                    text += "\n";
+                    if positions.len() > 0 {
+                        text.push_str(&format!("TILE \"{}\"", tile));
+                        for position in positions {
+                            text.push_str(&format!(" {}:{}", position.x, position.y));
+                        }
+                    }
+                }
+
+                if let Err(e) = file.write(text.as_bytes()) { return Err(e); }
+
+                Ok(())
+            }
+            Err(e) => Err(e)
+        }
+    }
+
+
+    /// Parses a string describing a tile map
+    fn from_str(text: &str, tile_size: f64) -> Option<TileMap> {
+        let mut tile_map = TileMap {
+            tiles: HashMap::new(),
+            tile_size,
+            player_start: Vector2i::new(0, 0),
+        };
+
+        let lines = text.lines().map(|l| { l.split_whitespace() });
+
+        for mut line in lines {
+            if let Some(word) = line.next() {
+                match word {
+                    // Sets the start location of the player
+                    "PLAYER_START" => {
+                        if let Some(x) = line.next() {
+                            if let Some(y) = line.next() {
+                                tile_map.player_start.x = x.parse().unwrap();
+                                tile_map.player_start.y = y.parse().unwrap();
+                                continue;
+                            }
+                        }
+
+                        println!("PLAYER_START: invalid number of arguments!");
+                        return None;
+                    }
+
+
+                    // Adds new tiles to the map
+                    "TILE" => {
+                        if let Some(id) = line.next() {
+                            let tile = Tile::from(id.trim_matches('\"'));
+                            while let Some(coordinate) = line.next() {
+                                let mut numbers = coordinate.split(':');
+
+                                if let Some(x) = numbers.next() {
+                                    if let Some(y) = numbers.next() {
+                                        tile_map.add_tile(Vector2i::new(x.parse().unwrap(), y.parse().unwrap()), tile);
+                                        continue;
+                                    }
+                                }
+
+                                println!("Invalid coordinate format: '{}'", coordinate);
+                                return None;
+                            }
+                        }
+                    }
+
+                    word => {
+                        println!("Failed to load tile map: invalid command '{}'", word);
+                        return None;
+                    }
+                }
+            }
+        }
+
+        Some(tile_map)
+    }
+
+
+    /// Returns the size, in pixels, of a single tile
+    pub fn get_tile_size(&self) -> f64 {
+        self.tile_size
+    }
+
+
+    /// Returns a new player located in this map
+    pub fn spawn_player(&self) -> Player {
+        Player::new(self.tile_size * Vector2::from(self.player_start) + Vector2::new(self.tile_size / 2.0, self.tile_size / 2.0))
+    }
+
+
+    /// Adds a tile to the map
     pub fn add_tile(&mut self, pos: Vector2i, tile: Tile) {
         let mut hull = tile.get_convex_hull(self.tile_size);
         hull.translate(Vector2::from(pos) * self.tile_size);
@@ -60,6 +196,8 @@ impl TileMap {
         }
     }
 
+
+    /// Removes a tile from the map
     pub fn remove_tile(&mut self, pos: Vector2i) {
         self.tiles.remove(&pos);
 
@@ -75,6 +213,8 @@ impl TileMap {
         }
     }
 
+
+    /// Updates a singular tile
     fn update_tile(&mut self, pos: Vector2i) {
         let directions = Direction::all();
 
@@ -98,6 +238,8 @@ impl TileMap {
         }
     }
 
+
+    /// Renders the entire map
     pub fn draw(&self, renderer: &mut Renderer) {
         for (_, &(_, ref obstacle)) in self.tiles.iter() {
             renderer.color = [1.0, 0.0, 0.0, 0.2];
@@ -113,6 +255,7 @@ impl TileMap {
     }
 
 
+    /// Renders shadows casted from a singular point
     pub fn draw_shadows(&self, renderer: &mut Renderer, center: Vector2) {
         for (_, &(_, ref obstacle)) in self.tiles.iter() {
             let points = obstacle.get_points();
@@ -256,6 +399,32 @@ impl Tile {
                 }
             }
         }
+    }
+}
+
+impl<'a> From<&'a str> for Tile {
+    fn from(id: &'a str) -> Self {
+        match id as &str {
+            "Square" => Tile::Square,
+            "WedgeUpLeft" => Tile::WedgeUpLeft,
+            "WedgeUpRight" => Tile::WedgeUpRight,
+            "WedgeDownLeft" => Tile::WedgeDownLeft,
+            "WedgeDownRight" => Tile::WedgeDownRight,
+
+            id => panic!("Did not recognize '{}' as a tile name", id)
+        }
+    }
+}
+
+impl std::fmt::Display for Tile {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", match *self {
+            Tile::Square => "Square",
+            Tile::WedgeUpLeft => "WedgeUpLeft",
+            Tile::WedgeUpRight => "WedgeUpRight",
+            Tile::WedgeDownLeft => "WedgeDownLeft",
+            Tile::WedgeDownRight => "WedgeDownRight",
+        })
     }
 }
 
