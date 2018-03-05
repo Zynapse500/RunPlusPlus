@@ -276,8 +276,10 @@ impl TileMap {
     }
 }
 
-impl Collide<ConvexHull> for TileMap {
-    fn overlap(&self, other: &ConvexHull) -> Option<(f64, Vector2)> {
+impl<C> Collide<C> for TileMap
+    where C: Collide<ConvexHull>
+{
+    fn overlap(&self, other: &C) -> Option<(f64, Vector2)> {
         let smallest = std::f64::INFINITY;
         let mut best = None;
 
@@ -287,9 +289,9 @@ impl Collide<ConvexHull> for TileMap {
             // Broad phase
             if bounding_box.intersects(&obstacle.bounding_box()) {
                 // Narrow phase
-                if let Some((overlap, resolve)) = obstacle.overlap(other) {
+                if let Some((overlap, resolve)) = other.overlap(obstacle) {
                     if overlap < smallest {
-                        best = Some(resolve);
+                        best = Some(-resolve);
                     }
                 }
             }

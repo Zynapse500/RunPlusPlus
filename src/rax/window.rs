@@ -38,8 +38,8 @@ impl Window {
 
         let context = glutin::ContextBuilder::new()
             .with_vsync(settings.vsync)
-            .with_srgb(true)
-            .with_multisampling(settings.samples);
+            .with_multisampling(settings.samples)
+            .with_srgb(true);
 
         let display = glium::Display::new(window, context, &events_loop).unwrap();
 

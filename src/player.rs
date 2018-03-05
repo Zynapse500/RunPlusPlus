@@ -60,6 +60,7 @@ impl Player {
         let w = 24.0;
         let h = 45.0;
         let mut player = Player {
+            //collision: Circle::new(position, 45.0 / 2.0),
             collision: ConvexHull::from_points(&[
                 Vector2 { x: position.x - w / 2.0, y: position.y - h / 2.0 },
                 Vector2 { x: position.x + w / 2.0, y: position.y - h / 2.0 },
@@ -141,7 +142,7 @@ impl Player {
         self.check_collisions(obstacles);
 
         let rag_doll = self.get_rag_doll();
-        let factor = 20.0;
+        let factor = 15.0;
 
 
         self.rag_doll.hip += factor * dt * (rag_doll.hip - self.rag_doll.hip);
@@ -172,13 +173,13 @@ impl Player {
 
             let rag_doll = &self.rag_doll;
 
-            renderer.draw_line(rag_doll.shoulder, rag_doll.hip);
+            renderer.draw_rounded_line(rag_doll.shoulder, rag_doll.hip);
             for i in 0..2 {
-                renderer.draw_line(rag_doll.shoulder, rag_doll.arm_joints[i]);
-                renderer.draw_line(rag_doll.arm_joints[i], rag_doll.hands[i]);
+                renderer.draw_rounded_line(rag_doll.shoulder, rag_doll.arm_joints[i]);
+                renderer.draw_rounded_line(rag_doll.arm_joints[i], rag_doll.hands[i]);
 
-                renderer.draw_line(rag_doll.hip, rag_doll.leg_joints[i]);
-                renderer.draw_line(rag_doll.leg_joints[i], rag_doll.feet[i]);
+                renderer.draw_rounded_line(rag_doll.hip, rag_doll.leg_joints[i]);
+                renderer.draw_rounded_line(rag_doll.leg_joints[i], rag_doll.feet[i]);
             }
         }
     }
@@ -420,7 +421,7 @@ impl Player {
             if let Some(overlap) = first {
                 self.resolve_overlap(overlap);
                 i += 1;
-                if i > 100 {
+                if i > 10 {
                     break;
                 }
             } else {
@@ -435,6 +436,9 @@ impl Player {
     /// Resolves an overlap
     fn resolve_overlap(&mut self, overlap: (f64, Vector2)) {
         let (_, resolve) = overlap;
+        if resolve.x != 0.0 {
+            println!("Resolve: {:?}", resolve);
+        }
 
         self.translate(-resolve);
 
@@ -459,11 +463,10 @@ impl Player {
         if normal.dot(Vector2::new(0.0, -1.0)) > 0.5 {
             self.ground_normal = Some(normal);
             self.wall_normal = None;
-        } else if let Some(direction) = self.move_direction {
+        } else {
             let dot = normal.dot(Vector2::new(1.0, 0.0));
 
-            if dot > 0.95 && direction == MoveDirection::Left ||
-                dot < -0.96 && direction == MoveDirection::Right {
+            if dot > 0.95 || dot < -0.95 {
                 self.wall_normal = Some(normal);
             }
         }

@@ -16,6 +16,7 @@ pub struct Renderer {
 
     pub color: [f64; 4],
     pub line_width: f64,
+    pub segments: u64,
 
     frame: Option<Frame>,
 }
@@ -45,6 +46,7 @@ impl Renderer {
 
             color: [1.0, 0.0, 0.0, 1.0],
             line_width: 1.0,
+            segments: 32,
 
             frame: None,
         }
@@ -164,6 +166,40 @@ impl Renderer {
         }
     }
 
+    /// Render a filled circle
+    pub fn fill_circle(&mut self, center: Vector2, radius: f64) {
+        let left = center.x - radius;
+        let right = center.x + radius;
+        let top = center.y - radius;
+        let bottom = center.y + radius;
+
+        if self.rectangle_visible(left, right, top, bottom) {
+            let i = self.vertices.len() as u32;
+
+            self.vertices.push(Vertex::pc([center.x, center.y], self.color));
+
+            use std::f64::consts::PI;
+            let angle_increment = 2.0 * PI / self.segments as f64;
+
+            let mut angle = 0.0_f64;
+
+            for s in 0..self.segments as u32 {
+                let (sin, cos) = angle.sin_cos();
+
+                let dx = cos * radius;
+                let dy = sin * radius;
+
+                self.vertices.push(Vertex::pc([center.x + dx, center.y + dy], self.color));
+
+                self.indices.push(i);
+                self.indices.push(i + s + 1);
+                self.indices.push(i + (s + 1) % self.segments as u32 + 1);
+
+                angle += angle_increment;
+            }
+        }
+    }
+
 
     /// Render the outline of a rectangle
     pub fn draw_rectangle(&mut self, left: f64, right: f64, top: f64, bottom: f64) {
@@ -218,8 +254,9 @@ impl Renderer {
 
     /// Render a line from point a to b
     pub fn draw_line(&mut self, a: Vector2, b: Vector2) {
-        let (left, right) = if a.x < b.x { (a.x, b.x) } else { (b.x, a.x) };
-        let (top, bottom) = if a.y < b.y { (a.y, b.y) } else { (b.y, a.y) };
+        let w = self.line_width;
+        let (left, right) = if a.x < b.x { (a.x - w, b.x + w) } else { (b.x - w, a.x + w) };
+        let (top, bottom) = if a.y < b.y { (a.y - w, b.y + w) } else { (b.y - w, a.y + w) };
 
         if self.rectangle_visible(left, right, top, bottom) {
             let start_index = self.vertices.len() as u32;
@@ -247,6 +284,17 @@ impl Renderer {
             self.indices.push(start_index + 0);
         }
     }
+
+
+    /// Render a line from point a to b with rounded caps
+    pub fn draw_rounded_line(&mut self, a: Vector2, b: Vector2) {
+        self.draw_line(a, b);
+
+        let r = self.line_width / 2.0;
+        self.fill_circle(a, r);
+        self.fill_circle(b, r);
+    }
+
 
 
     /// Determines if a rectangle is in view
