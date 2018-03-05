@@ -26,7 +26,7 @@ fn main() {
     let game = rax::GameBuilder::new()
         .with_title("R++")
         .with_size(1280, 720)
-        .with_fullscreen(true)
+        .with_fullscreen(false)
         .with_vsync(false)
         .with_samples(8);
 

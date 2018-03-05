@@ -5,8 +5,11 @@ use rax::Renderer;
 
 pub struct Player {
     collision: ConvexHull,
+    rag_doll: RagDoll,
 
+    center: Vector2,
     velocity: Vector2,
+
     move_direction: Option<MoveDirection>,
     face_direction: MoveDirection,
 
@@ -38,19 +41,41 @@ enum MoveDirection {
 }
 
 
+/// Stores the positions of all limb endpoints
+struct RagDoll {
+    shoulder: Vector2,
+    arm_joints: [Vector2; 2],
+    hands: [Vector2; 2],
+
+    hip: Vector2,
+    leg_joints: [Vector2; 2],
+    feet: [Vector2; 2],
+}
+
+
 impl Player {
     pub fn new(position: Vector2) -> Player {
         let w = 24.0;
         let h = 48.0;
-        Player {
+        let mut player = Player {
             collision: ConvexHull::from_points(&[
                 Vector2 { x: position.x - w / 2.0, y: position.y - h / 2.0 },
                 Vector2 { x: position.x + w / 2.0, y: position.y - h / 2.0 },
                 Vector2 { x: position.x + w / 2.0, y: position.y + h / 2.0 },
                 Vector2 { x: position.x - w / 2.0, y: position.y + h / 2.0 },
             ]),
+            rag_doll: RagDoll {
+                shoulder: Vector2::new(0.0, 0.0),
+                arm_joints: [Vector2::new(0.0, 0.0); 2],
+                hands: [Vector2::new(0.0, 0.0); 2],
+                hip: Vector2::new(0.0, 0.0),
+                leg_joints: [Vector2::new(0.0, 0.0); 2],
+                feet: [Vector2::new(0.0, 0.0); 2],
+            },
 
+            center: position,
             velocity: Vector2 { x: 0.0, y: 0.0 },
+
             move_direction: None,
             face_direction: MoveDirection::Right,
 
@@ -59,7 +84,11 @@ impl Player {
             jumping: false,
 
             commands: Vec::new(),
-        }
+        };
+
+        player.rag_doll = player.get_rag_doll();
+
+        player
     }
 
 
@@ -103,6 +132,24 @@ impl Player {
 
         self.check_collisions(obstacles);
 
+        let rag_doll = self.get_rag_doll();
+        let factor = 20.0;
+
+
+        self.rag_doll.hip += factor * dt * (rag_doll.hip - self.rag_doll.hip);
+
+        // Keep the hip in the center
+        let delta = self.center - self.rag_doll.hip;
+
+        self.rag_doll.hip += delta;
+        self.rag_doll.shoulder += factor * dt * (rag_doll.shoulder - self.rag_doll.shoulder) + delta;
+
+        for i in 0..2 {
+            self.rag_doll.arm_joints[i] += factor * dt * (rag_doll.arm_joints[i] - self.rag_doll.arm_joints[i]) + delta;
+            self.rag_doll.hands[i] += factor * dt * (rag_doll.hands[i] - self.rag_doll.hands[i]) + delta;
+            self.rag_doll.leg_joints[i] += factor * dt * (rag_doll.leg_joints[i] - self.rag_doll.leg_joints[i]) + delta;
+            self.rag_doll.feet[i] += factor * dt * (rag_doll.feet[i] - self.rag_doll.feet[i]) + delta;
+        }
     }
 
 
@@ -112,115 +159,181 @@ impl Player {
             renderer.color = [0.0, 0.0, 1.0, 0.3];
             renderer.fill_convex(self.collision.get_points());
 
-            let bounds = self.collision.bounding_box();
-            let left = bounds.left;
-            let right = bounds.right;
-            let top = bounds.top;
-            let bottom = bounds.bottom;
-
-            let mid = Vector2::new((left + right) / 2.0, (top + bottom) / 2.0);
-            let size = Vector2::new(right - left, bottom - top);
-
             renderer.color = [1.0, 1.0, 1.0, 1.0];
             renderer.line_width = 2.0;
 
-            // Legs
-            {
-                let mut hip = mid;
+            let rag_doll = &self.rag_doll;
 
-                let (mut contact_leg_left, mut contact_leg_right, mut contact_arm_left, mut contact_arm_right) = if let Some(normal) = self.wall_normal {
-                    let x = mid.x - normal.x * size.x / 2.0;
+            renderer.draw_line(rag_doll.shoulder, rag_doll.hip);
+            for i in 0..2 {
+                renderer.draw_line(rag_doll.shoulder, rag_doll.arm_joints[i]);
+                renderer.draw_line(rag_doll.arm_joints[i], rag_doll.hands[i]);
 
-                    hip.x = mid.x - normal.x * size.x / 4.0;
-
-                    (
-                        Vector2::new(x, bottom - size.y / 5.0),
-                        Vector2::new(x, bottom),
-                        Vector2::new(x, top + size.y / 3.0),
-                        Vector2::new(x, top + size.y / 2.0),
-                    )
-                } else if let Some(normal) = self.ground_normal {
-                    let angle = (hip.x / size.x * 1.0).sin() / 3.0;
-                    let contact_x = if normal.x < 0.0 { right } else { left };
-
-                    let left_x = hip.x + angle * size.x;
-                    let right_x = hip.x - angle * size.x;
-
-                    let slope = normal.x / normal.y;
-
-                    (
-                        Vector2::new(left_x, bottom + (contact_x - left_x) * slope),
-                        Vector2::new(right_x, bottom + (contact_x - right_x) * slope),
-                        Vector2::new(mid.x + angle * size.x / 2.0, mid.y),
-                        Vector2::new(mid.x - angle * size.x / 2.0, mid.y),
-                    )
-                } else {
-                    let x = hip.x - self.velocity.x * size.x / 2.0 / 250.0;
-                    (
-                        Vector2::new(x, bottom - size.y / 5.0),
-                        Vector2::new(x, bottom),
-                        Vector2::new(x + size.x / 3.0, mid.y - size.y / 5.0),
-                        Vector2::new(x - size.x / 3.0, mid.y),
-                    )
-                };
-
-                let leg_length = size.y / 1.5;
-                let arm_length = size.y / 3.0;
-
-                let joint = |contact: &mut Vector2, length: f64| {
-                    let delta = hip - *contact;
-                    let distance = delta.len();
-                    let discriminant = (length / 2.0).powi(2) - (distance / 2.0).powi(2);
-                    let middle = (hip + *contact) / 2.0;
-                    if discriminant < 0.0 {
-                        *contact = hip + (*contact - middle).norm() * length;
-                        middle
-                    } else {
-                        let advance = discriminant.sqrt();
-                        let direction = if self.velocity.x < 0.0 {
-                            -1.0
-                        } else if self.velocity.x > 0.0 {
-                            1.0
-                        } else {
-                            if let Some(normal) = self.wall_normal {
-                                if normal.x > 0.0 {
-                                    1.0
-                                } else {
-                                    -1.0
-                                }
-                            } else {
-                                0.5
-                            }
-                        };
-                        middle + Vector2::new(-delta.y, delta.x).norm() * advance * direction
-                    }
-                };
-
-                let leg_joint_left = joint(&mut contact_leg_left, leg_length);
-                let leg_joint_right = joint(&mut contact_leg_right, leg_length);
-                let arm_joint_left = joint(&mut contact_arm_left, arm_length);
-                let arm_joint_right = joint(&mut contact_arm_right, arm_length);
-
-                // Legs
-                renderer.draw_line(hip, leg_joint_left);
-                renderer.draw_line(hip, leg_joint_right);
-
-                renderer.draw_line(leg_joint_left, contact_leg_left);
-                renderer.draw_line(leg_joint_right, contact_leg_right);
-
-                let upper = Vector2::new(mid.x, mid.y - size.y / 4.0);
-
-                // Arms
-                renderer.draw_line(upper, arm_joint_left);
-                renderer.draw_line(upper, arm_joint_right);
-
-                renderer.draw_line(arm_joint_left, contact_arm_left);
-                renderer.draw_line(arm_joint_right, contact_arm_right);
-
-                // Chest
-                renderer.draw_line(upper, Vector2::new(hip.x, hip.y));
+                renderer.draw_line(rag_doll.hip, rag_doll.leg_joints[i]);
+                renderer.draw_line(rag_doll.leg_joints[i], rag_doll.feet[i]);
             }
         }
+    }
+
+
+    /// Returns the current rag doll
+    fn get_rag_doll(&self) -> RagDoll {
+        let mut rag_doll = RagDoll {
+            shoulder: Vector2::new(0.0, 0.0),
+            arm_joints: [Vector2::new(0.0, 0.0); 2],
+            hands: [Vector2::new(0.0, 0.0); 2],
+            hip: Vector2::new(0.0, 0.0),
+            leg_joints: [Vector2::new(0.0, 0.0); 2],
+            feet: [Vector2::new(0.0, 0.0); 2],
+        };
+
+        let bounds = self.collision.bounding_box();
+        let left = bounds.left;
+        let right = bounds.right;
+        let top = bounds.top;
+        let bottom = bounds.bottom;
+
+        let mid = Vector2::new((left + right) / 2.0, (top + bottom) / 2.0);
+        let size = Vector2::new(right - left, bottom - top);
+
+        {
+            // Construct unit vector with an angle between x axis
+            let angle = |angle: f64| {
+                use std::f64::consts::PI;
+                let rad = angle / 180.0 * PI;
+                Vector2::new(rad.cos(), -rad.sin())
+            };
+
+            // Map value in range [0, 1] to range [min, max]
+            let map = |v: f64, min: f64, max: f64| { v * (max - min) + min };
+
+            let fmod = |a: f64, b: f64| { a - (a / b).floor() * b };
+
+            if let Some(normal) = self.wall_normal {
+                let angle = |a: f64| {
+                    angle(if normal.x > 0.0 {a} else {180.0 - a})
+                };
+
+                rag_doll.hip.x = mid.x;
+                rag_doll.hip.y = mid.y;
+
+                rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(75.0);
+
+                rag_doll.arm_joints = [
+                    rag_doll.shoulder + size.y / 5.0 * angle(160.0),
+                    rag_doll.shoulder + size.y / 5.0 * angle(210.0)
+                ];
+                rag_doll.hands = [
+                    rag_doll.arm_joints[0] + size.y / 5.0 * angle(140.0),
+                    rag_doll.arm_joints[1] + size.y / 5.0 * angle(140.0)
+                ];
+
+                rag_doll.leg_joints = [
+                    rag_doll.hip + size.y / 4.0 * angle(130.0),
+                    rag_doll.hip + size.y / 4.0 * angle(240.0),
+                ];
+
+                rag_doll.feet = [
+                    rag_doll.leg_joints[0] + size.y / 4.0 * angle(240.0),
+                    rag_doll.leg_joints[1] + size.y / 4.0 * angle(240.0),
+                ];
+
+                // Climbing wall
+            } else if let Some(normal) = self.ground_normal {
+                let angle = |a: f64| {
+                    angle(if self.velocity.x > 0.0 {a} else {180.0 - a})
+                };
+
+                let mut p = fmod(mid.x, size.x * 4.0) / (size.x * 4.0) * 2.0;
+
+                // Running
+                rag_doll.hip.x = mid.x;
+                rag_doll.hip.y = mid.y;
+
+                let swap = if p > 1.0 {
+                    p -= 1.0;
+                    true
+                } else {
+                    false
+                };
+
+                rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(map(p, 80.0, 80.0));
+
+                let arm_angles = [
+                    map(p, 360.0 - 60.0, 360.0 - 140.0),
+                    map(p, 360.0 - 140.0, 360.0 - 60.0)
+                ];
+
+                rag_doll.arm_joints = [
+                    rag_doll.shoulder + size.y / 5.0 * angle(arm_angles[0]),
+                    rag_doll.shoulder + size.y / 5.0 * angle(arm_angles[1])
+                ];
+                rag_doll.hands = [
+                    rag_doll.arm_joints[0] + size.y / 5.0 * angle(arm_angles[0] + 70.0),
+                    rag_doll.arm_joints[1] + size.y / 5.0 * angle(arm_angles[1] + 70.0)
+                ];
+
+                let leg_angles = [
+                    map(p, 360.0 - 60.0, 360.0 - 140.0),
+                    map(p, 360.0 - 140.0, 360.0 - 60.0)
+                ];
+
+                rag_doll.leg_joints = [
+                    rag_doll.hip + size.y / 4.0 * angle(leg_angles[0]),
+                    rag_doll.hip + size.y / 4.0 * angle(leg_angles[1]),
+                ];
+
+                rag_doll.feet = [
+                    rag_doll.leg_joints[0] + size.y / 4.0 * angle(leg_angles[0] - map(p, 0.0, 60.0)),
+                    rag_doll.leg_joints[1] + size.y / 4.0 * angle(leg_angles[1] - map(p, 60.0, 0.0)),
+                ];
+
+                if swap {
+                    rag_doll.arm_joints.swap(0, 1);
+                    rag_doll.hands.swap(0, 1);
+                    rag_doll.leg_joints.swap(0, 1);
+                    rag_doll.feet.swap(0, 1);
+                }
+            } else {
+                let angle = |a: f64| {
+                    angle(if self.velocity.x > 0.0 {a} else {180.0 - a})
+                };
+
+                // Falling/Jumping
+                let vy = {
+                    let max = -50.0;
+                    let min = 75.0;
+                    let v = (self.velocity.y - min) / (max - min);
+                    if v > 1.0 { 1.0 } else if v < 0.0 { 0.0 } else { v }
+                };
+
+                rag_doll.hip.x = mid.x;
+                rag_doll.hip.y = mid.y;
+
+                rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(map(vy, 100.00, 70.0));
+
+                rag_doll.arm_joints = [
+                    rag_doll.shoulder + size.y / 5.0 * angle(map(vy, 0.0, -60.0)),
+                    rag_doll.shoulder + size.y / 5.0 * angle(map(vy, 180.0, 210.0))
+                ];
+                rag_doll.hands = [
+                    rag_doll.arm_joints[0] + size.y / 5.0 * angle(map(vy, 30.0, 50.0)),
+                    rag_doll.arm_joints[1] + size.y / 5.0 * angle(map(vy, 200.0, 220.0))
+                ];
+
+                rag_doll.leg_joints = [
+                    rag_doll.hip + size.y / 4.0 * angle(map(vy, -60.0, 10.0)),
+                    rag_doll.hip + size.y / 4.0 * angle(map(vy, 360.0 - 10.0, 240.0)),
+                ];
+
+                rag_doll.feet = [
+                    rag_doll.leg_joints[0] + size.y / 4.0 * angle(map(vy, 360.0 - 60.0, 240.0)),
+                    rag_doll.leg_joints[1] + size.y / 4.0 * angle(map(vy, 220.0, 240.0)),
+                ];
+            };
+        }
+
+        rag_doll
     }
 
 
@@ -233,6 +346,7 @@ impl Player {
     /// Translate the player
     pub fn translate(&mut self, amount: Vector2) {
         self.collision.translate(amount);
+        self.center += amount;
     }
 
 
@@ -322,7 +436,7 @@ impl Player {
             let dot = plane.dot(self.velocity.norm());
 
             self.velocity = if v_dot <= (50.0 as f64).cos() && self.move_direction.is_some() {
-                plane * self.velocity.len() * if dot > 0.0 {dot.sqrt()} else {-(-dot).sqrt()}
+                plane * self.velocity.len() * if dot > 0.0 { dot.powf(1.0 / 4.0) } else { -(-dot).powf(1.0 / 4.0) }
             } else {
                 plane * plane.dot(self.velocity)
             }
