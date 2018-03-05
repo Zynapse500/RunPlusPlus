@@ -17,6 +17,7 @@ pub struct Player {
     wall_normal: Option<Vector2>,
 
     jumping: bool,
+    sliding: bool,
 
     commands: Vec<PlayerCommand>,
 }
@@ -31,6 +32,7 @@ pub enum PlayerCommand {
     StopJump,
 
     Drop,
+    Slide
 }
 
 
@@ -56,7 +58,7 @@ struct RagDoll {
 impl Player {
     pub fn new(position: Vector2) -> Player {
         let w = 24.0;
-        let h = 48.0;
+        let h = 45.0;
         let mut player = Player {
             collision: ConvexHull::from_points(&[
                 Vector2 { x: position.x - w / 2.0, y: position.y - h / 2.0 },
@@ -81,7 +83,9 @@ impl Player {
 
             ground_normal: None,
             wall_normal: None,
+
             jumping: false,
+            sliding: false,
 
             commands: Vec::new(),
         };
@@ -104,7 +108,11 @@ impl Player {
             if dot < -0.95 ||
                 dot > 0.95 {
                 if self.velocity.y > 0.0 {
-                    self.velocity.y -= self.velocity.y * dt * 9.0;
+                    if self.sliding {
+                        self.velocity.y -= self.velocity.y * dt * 2.0;
+                    } else {
+                        self.velocity.y -= self.velocity.y * dt * 9.0;
+                    }
                 }
             }
         }
@@ -157,7 +165,7 @@ impl Player {
     pub fn draw(&self, renderer: &mut Renderer) {
         {
             renderer.color = [0.0, 0.0, 1.0, 0.3];
-            renderer.fill_convex(self.collision.get_points());
+            // renderer.fill_convex(self.collision.get_points());
 
             renderer.color = [1.0, 1.0, 1.0, 1.0];
             renderer.line_width = 2.0;
@@ -196,142 +204,141 @@ impl Player {
         let mid = Vector2::new((left + right) / 2.0, (top + bottom) / 2.0);
         let size = Vector2::new(right - left, bottom - top);
 
-        {
-            // Construct unit vector with an angle between x axis
-            let angle = |angle: f64| {
-                use std::f64::consts::PI;
-                let rad = angle / 180.0 * PI;
-                Vector2::new(rad.cos(), -rad.sin())
+        // Construct unit vector with an angle between x axis
+        let angle = |angle: f64| {
+            use std::f64::consts::PI;
+            let rad = angle / 180.0 * PI;
+            Vector2::new(rad.cos(), -rad.sin())
+        };
+
+        // Map value in range [0, 1] to range [min, max]
+        let map = |v: f64, min: f64, max: f64| { v * (max - min) + min };
+
+        let fmod = |a: f64, b: f64| { a - (a / b).floor() * b };
+
+        if let Some(normal) = self.wall_normal {
+            let angle = |a: f64| {
+                angle(if normal.x > 0.0 { a } else { 180.0 - a })
             };
 
-            // Map value in range [0, 1] to range [min, max]
-            let map = |v: f64, min: f64, max: f64| { v * (max - min) + min };
+            rag_doll.hip.x = mid.x;
+            rag_doll.hip.y = mid.y;
 
-            let fmod = |a: f64, b: f64| { a - (a / b).floor() * b };
+            rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(75.0);
 
-            if let Some(normal) = self.wall_normal {
-                let angle = |a: f64| {
-                    angle(if normal.x > 0.0 {a} else {180.0 - a})
-                };
+            rag_doll.arm_joints = [
+                rag_doll.shoulder + size.y / 5.0 * angle(160.0),
+                rag_doll.shoulder + size.y / 5.0 * angle(210.0)
+            ];
+            rag_doll.hands = [
+                rag_doll.arm_joints[0] + size.y / 5.0 * angle(140.0),
+                rag_doll.arm_joints[1] + size.y / 5.0 * angle(140.0)
+            ];
 
-                rag_doll.hip.x = mid.x;
-                rag_doll.hip.y = mid.y;
+            rag_doll.leg_joints = [
+                rag_doll.hip + size.y / 4.0 * angle(130.0),
+                rag_doll.hip + size.y / 4.0 * angle(240.0),
+            ];
 
-                rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(75.0);
+            rag_doll.feet = [
+                rag_doll.leg_joints[0] + size.y / 4.0 * angle(240.0),
+                rag_doll.leg_joints[1] + size.y / 4.0 * angle(240.0),
+            ];
 
-                rag_doll.arm_joints = [
-                    rag_doll.shoulder + size.y / 5.0 * angle(160.0),
-                    rag_doll.shoulder + size.y / 5.0 * angle(210.0)
-                ];
-                rag_doll.hands = [
-                    rag_doll.arm_joints[0] + size.y / 5.0 * angle(140.0),
-                    rag_doll.arm_joints[1] + size.y / 5.0 * angle(140.0)
-                ];
+            // Climbing wall
+        } else if let Some(normal) = self.ground_normal {
+            let angle = |a: f64| {
+                angle(if self.velocity.x > 0.0 { a } else { 180.0 - a })
+            };
 
-                rag_doll.leg_joints = [
-                    rag_doll.hip + size.y / 4.0 * angle(130.0),
-                    rag_doll.hip + size.y / 4.0 * angle(240.0),
-                ];
+            let mut p = fmod(mid.x, size.x * 4.0) / (size.x * 4.0) * 2.0;
 
-                rag_doll.feet = [
-                    rag_doll.leg_joints[0] + size.y / 4.0 * angle(240.0),
-                    rag_doll.leg_joints[1] + size.y / 4.0 * angle(240.0),
-                ];
+            // Running
+            rag_doll.hip.x = mid.x;
+            rag_doll.hip.y = mid.y;
 
-                // Climbing wall
-            } else if let Some(normal) = self.ground_normal {
-                let angle = |a: f64| {
-                    angle(if self.velocity.x > 0.0 {a} else {180.0 - a})
-                };
-
-                let mut p = fmod(mid.x, size.x * 4.0) / (size.x * 4.0) * 2.0;
-
-                // Running
-                rag_doll.hip.x = mid.x;
-                rag_doll.hip.y = mid.y;
-
-                let swap = if p > 1.0 {
-                    p -= 1.0;
-                    true
-                } else {
-                    false
-                };
-
-                rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(map(p, 80.0, 80.0));
-
-                let arm_angles = [
-                    map(p, 360.0 - 60.0, 360.0 - 140.0),
-                    map(p, 360.0 - 140.0, 360.0 - 60.0)
-                ];
-
-                rag_doll.arm_joints = [
-                    rag_doll.shoulder + size.y / 5.0 * angle(arm_angles[0]),
-                    rag_doll.shoulder + size.y / 5.0 * angle(arm_angles[1])
-                ];
-                rag_doll.hands = [
-                    rag_doll.arm_joints[0] + size.y / 5.0 * angle(arm_angles[0] + 70.0),
-                    rag_doll.arm_joints[1] + size.y / 5.0 * angle(arm_angles[1] + 70.0)
-                ];
-
-                let leg_angles = [
-                    map(p, 360.0 - 60.0, 360.0 - 140.0),
-                    map(p, 360.0 - 140.0, 360.0 - 60.0)
-                ];
-
-                rag_doll.leg_joints = [
-                    rag_doll.hip + size.y / 4.0 * angle(leg_angles[0]),
-                    rag_doll.hip + size.y / 4.0 * angle(leg_angles[1]),
-                ];
-
-                rag_doll.feet = [
-                    rag_doll.leg_joints[0] + size.y / 4.0 * angle(leg_angles[0] - map(p, 0.0, 60.0)),
-                    rag_doll.leg_joints[1] + size.y / 4.0 * angle(leg_angles[1] - map(p, 60.0, 0.0)),
-                ];
-
-                if swap {
-                    rag_doll.arm_joints.swap(0, 1);
-                    rag_doll.hands.swap(0, 1);
-                    rag_doll.leg_joints.swap(0, 1);
-                    rag_doll.feet.swap(0, 1);
-                }
+            let swap = if p > 1.0 {
+                p -= 1.0;
+                true
             } else {
-                let angle = |a: f64| {
-                    angle(if self.velocity.x > 0.0 {a} else {180.0 - a})
-                };
-
-                // Falling/Jumping
-                let vy = {
-                    let max = -50.0;
-                    let min = 75.0;
-                    let v = (self.velocity.y - min) / (max - min);
-                    if v > 1.0 { 1.0 } else if v < 0.0 { 0.0 } else { v }
-                };
-
-                rag_doll.hip.x = mid.x;
-                rag_doll.hip.y = mid.y;
-
-                rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(map(vy, 100.00, 70.0));
-
-                rag_doll.arm_joints = [
-                    rag_doll.shoulder + size.y / 5.0 * angle(map(vy, 0.0, -60.0)),
-                    rag_doll.shoulder + size.y / 5.0 * angle(map(vy, 180.0, 210.0))
-                ];
-                rag_doll.hands = [
-                    rag_doll.arm_joints[0] + size.y / 5.0 * angle(map(vy, 30.0, 50.0)),
-                    rag_doll.arm_joints[1] + size.y / 5.0 * angle(map(vy, 200.0, 220.0))
-                ];
-
-                rag_doll.leg_joints = [
-                    rag_doll.hip + size.y / 4.0 * angle(map(vy, -60.0, 10.0)),
-                    rag_doll.hip + size.y / 4.0 * angle(map(vy, 360.0 - 10.0, 240.0)),
-                ];
-
-                rag_doll.feet = [
-                    rag_doll.leg_joints[0] + size.y / 4.0 * angle(map(vy, 360.0 - 60.0, 240.0)),
-                    rag_doll.leg_joints[1] + size.y / 4.0 * angle(map(vy, 220.0, 240.0)),
-                ];
+                false
             };
-        }
+
+            rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(map(p, 80.0, 80.0));
+
+            let arm_angles = [
+                map(p, 360.0 - 30.0, 360.0 - 160.0),
+                map(p, 360.0 - 160.0, 360.0 - 30.0)
+            ];
+
+            rag_doll.arm_joints = [
+                rag_doll.shoulder + size.y / 5.0 * angle(arm_angles[0]),
+                rag_doll.shoulder + size.y / 5.0 * angle(arm_angles[1])
+            ];
+            rag_doll.hands = [
+                rag_doll.arm_joints[0] + size.y / 5.0 * angle(arm_angles[0] + 70.0),
+                rag_doll.arm_joints[1] + size.y / 5.0 * angle(arm_angles[1] + 70.0)
+            ];
+
+            let leg_angles = [
+                map(p, 360.0 - 60.0, 360.0 - 140.0),
+                map(p, 360.0 - 140.0, 360.0 - 60.0)
+            ];
+
+            rag_doll.leg_joints = [
+                rag_doll.hip + size.y / 4.0 * angle(leg_angles[0]),
+                rag_doll.hip + size.y / 4.0 * angle(leg_angles[1]),
+            ];
+
+            rag_doll.feet = [
+                rag_doll.leg_joints[0] + size.y / 4.0 * angle(leg_angles[0] - map(p, 0.0, 60.0)),
+                rag_doll.leg_joints[1] + size.y / 4.0 * angle(leg_angles[1] - map(p, 60.0, 0.0)),
+            ];
+
+            if swap {
+                rag_doll.arm_joints.swap(0, 1);
+                rag_doll.hands.swap(0, 1);
+                rag_doll.leg_joints.swap(0, 1);
+                rag_doll.feet.swap(0, 1);
+            }
+        } else {
+            let angle = |a: f64| {
+                angle(if self.velocity.x > 0.0 { a } else { 180.0 - a })
+            };
+
+            // Falling/Jumping
+            let vy = {
+                let max = -50.0;
+                let min = 75.0;
+                let v = (self.velocity.y - min) / (max - min);
+                if v > 1.0 { 1.0 } else if v < 0.0 { 0.0 } else { v }
+            };
+
+            rag_doll.hip.x = mid.x;
+            rag_doll.hip.y = mid.y;
+
+            rag_doll.shoulder = rag_doll.hip + size.y / 3.0 * angle(map(vy, 100.00, 70.0));
+
+            rag_doll.arm_joints = [
+                rag_doll.shoulder + size.y / 5.0 * angle(map(vy, 0.0, -60.0)),
+                rag_doll.shoulder + size.y / 5.0 * angle(map(vy, 180.0, 210.0))
+            ];
+            rag_doll.hands = [
+                rag_doll.arm_joints[0] + size.y / 5.0 * angle(map(vy, 30.0, 50.0)),
+                rag_doll.arm_joints[1] + size.y / 5.0 * angle(map(vy, 200.0, 220.0))
+            ];
+
+            rag_doll.leg_joints = [
+                rag_doll.hip + size.y / 4.0 * angle(map(vy, -60.0, 10.0)),
+                rag_doll.hip + size.y / 4.0 * angle(map(vy, 360.0 - 10.0, 240.0)),
+            ];
+
+            rag_doll.feet = [
+                rag_doll.leg_joints[0] + size.y / 4.0 * angle(map(vy, 360.0 - 60.0, 240.0)),
+                rag_doll.leg_joints[1] + size.y / 4.0 * angle(map(vy, 220.0, 240.0)),
+            ];
+        };
+
 
         rag_doll
     }
@@ -354,14 +361,19 @@ impl Player {
     fn handle_commands(&mut self, dt: f64) {
         self.move_direction = None;
 
+        self.sliding = false;
+
         let commands = self.commands.clone();
         for command in commands {
             match command {
                 PlayerCommand::MoveLeft => { self.move_direction(MoveDirection::Left, dt); }
                 PlayerCommand::MoveRight => { self.move_direction(MoveDirection::Right, dt); }
+
                 PlayerCommand::Jump => { self.jumping = true; }
                 PlayerCommand::StopJump => { self.jumping = false; }
+
                 PlayerCommand::Drop => { self.wall_normal = None; }
+                PlayerCommand::Slide => {self.sliding = true; }
             }
         }
 
@@ -447,9 +459,11 @@ impl Player {
         if normal.dot(Vector2::new(0.0, -1.0)) > 0.5 {
             self.ground_normal = Some(normal);
             self.wall_normal = None;
-        } else {
-            let dot = normal.dot(Vector2::new(0.0, -1.0));
-            if dot < 0.05 && dot > -0.05 {
+        } else if let Some(direction) = self.move_direction {
+            let dot = normal.dot(Vector2::new(1.0, 0.0));
+
+            if dot > 0.95 && direction == MoveDirection::Left ||
+                dot < -0.96 && direction == MoveDirection::Right {
                 self.wall_normal = Some(normal);
             }
         }
@@ -480,6 +494,6 @@ impl Player {
 
     /// Returns the player's center
     pub fn get_center(&self) -> Vector2 {
-        self.collision.average()
+        self.center
     }
 }

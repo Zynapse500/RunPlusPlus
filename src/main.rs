@@ -101,6 +101,12 @@ impl rax::Game for RunPlusPlus {
             if self.pressed_keys.contains(&KeyCode::A) { self.player.submit_command(PlayerCommand::MoveLeft); }
             if self.pressed_keys.contains(&KeyCode::D) { self.player.submit_command(PlayerCommand::MoveRight); }
 
+            if self.pressed_keys.contains(&KeyCode::S) {
+                if self.pressed_keys.contains(&KeyCode::A) || self.pressed_keys.contains(&KeyCode::D) {
+                    self.player.submit_command(PlayerCommand::Slide);
+                }
+            }
+
             self.player.update(dt, &[&self.tile_map, &self.convex]);
 
             self.camera_center += (self.player.get_center() - self.camera_center) * dt * 4.0;
@@ -148,7 +154,11 @@ impl rax::Game for RunPlusPlus {
 
             KeyCode::Space => self.player.submit_command(PlayerCommand::Jump),
 
-            KeyCode::S => self.player.submit_command(PlayerCommand::Drop),
+            KeyCode::S => {
+                if !self.pressed_keys.contains(&KeyCode::A) && !self.pressed_keys.contains(&KeyCode::D) {
+                    self.player.submit_command(PlayerCommand::Drop)
+                }
+            },
 
             KeyCode::F1 => self.tile_map.save("levels/tmp.lvl").unwrap_or_else(|e|{println!("{}", e)}),
 
