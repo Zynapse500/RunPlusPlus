@@ -62,9 +62,15 @@ impl Renderer {
     }
 
 
+    /// Set the center of the camera
     pub fn set_center(&mut self, center: Vector2) {
         self.center = center;
         self.update_view();
+    }
+
+    /// Get the current center of the camera
+    pub fn get_center(&self) -> Vector2 {
+        self.center
     }
 
 

@@ -247,7 +247,7 @@ impl Player {
             ];
 
             // Climbing wall
-        } else if let Some(normal) = self.ground_normal {
+        } else if let Some(_) = self.ground_normal {
             let angle = |a: f64| {
                 angle(if self.velocity.x > 0.0 { a } else { 180.0 - a })
             };
@@ -436,9 +436,6 @@ impl Player {
     /// Resolves an overlap
     fn resolve_overlap(&mut self, overlap: (f64, Vector2)) {
         let (_, resolve) = overlap;
-        if resolve.x != 0.0 {
-            println!("Resolve: {:?}", resolve);
-        }
 
         self.translate(-resolve);
 

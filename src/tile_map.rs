@@ -241,17 +241,19 @@ impl TileMap {
 
     /// Renders the entire map
     pub fn draw(&self, renderer: &mut Renderer) {
+        // Tiles
         for (_, &(_, ref obstacle)) in self.tiles.iter() {
             renderer.color = [1.0, 0.0, 0.0, 0.2];
             renderer.fill_convex(obstacle.get_points());
         }
 
-        for (_, &(_, ref obstacle)) in self.tiles.iter() {
+        // Normals
+        /*for (_, &(_, ref obstacle)) in self.tiles.iter() {
             renderer.color = [0.0, 1.0, 1.0, 0.2];
             for line in obstacle.get_normals_as_lines(24.0) {
                 renderer.draw_line(line.0, line.1);
             }
-        }
+        }*/
     }
 
 

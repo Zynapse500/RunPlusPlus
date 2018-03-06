@@ -11,10 +11,6 @@ pub mod collision;
 
 
 pub trait Game {
-    /// Creates a new game
-    fn new() -> Self;
-
-
     /// Updates the game
     fn update(&mut self, dt: f64);
 
@@ -109,13 +105,11 @@ impl GameBuilder {
     }
 
 
-    pub fn run<T>(self)
+    pub fn run<T>(self, mut game: T)
         where T: Game
     {
         let mut window = Window::new(self.window);
         let mut renderer = Renderer::new(window.get_display());
-
-        let mut game = T::new();
 
         let mut last = Instant::now();
         while window.is_open() && game.is_running() {
