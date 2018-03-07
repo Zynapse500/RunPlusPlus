@@ -22,10 +22,21 @@ pub struct TileMap {
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Tile {
     Square,
+
     WedgeUpLeft,
     WedgeUpRight,
     WedgeDownLeft,
     WedgeDownRight,
+
+    SlantUpLeft,
+    SlantUpRight,
+    SlantDownLeft,
+    SlantDownRight,
+
+    SlantedWedgeUpLeft,
+    SlantedWedgeUpRight,
+    SlantedWedgeDownLeft,
+    SlantedWedgeDownRight,
 }
 
 
@@ -231,9 +242,9 @@ impl TileMap {
         if let Some(ref mut this) = self.tiles.get_mut(&pos) {
             this.1.clear_ignored_normals();
             for n in neighbours.into_iter() {
-                if this.0.is_solid(n.1.opposite()) {
-                    this.1.ignore_normal(n.1.as_delta().into());
-                }
+                // if this.0.is_solid(n.1.opposite()) {
+                this.1.ignore_normal(n.1.as_delta().into());
+                // }
             }
         }
     }
@@ -248,12 +259,12 @@ impl TileMap {
         }
 
         // Normals
-        /*for (_, &(_, ref obstacle)) in self.tiles.iter() {
+        for (_, &(_, ref obstacle)) in self.tiles.iter() {
             renderer.color = [0.0, 1.0, 1.0, 0.2];
-            for line in obstacle.get_normals_as_lines(24.0) {
+            for line in obstacle.get_normals_as_lines(::TILE_SIZE / 3.0) {
                 renderer.draw_line(line.0, line.1);
             }
-        }*/
+        }
     }
 
 
@@ -372,12 +383,75 @@ impl Tile {
                     Vector2::new(0.0, size),
                 ])
             }
+
+            Tile::SlantUpLeft => {
+                ConvexHull::from_points(&[
+                    Vector2::new(0.0, size / 2.0),
+                    Vector2::new(size, 0.0),
+                    Vector2::new(size, size),
+                    Vector2::new(0.0, size),
+                ])
+            }
+            Tile::SlantUpRight => {
+                ConvexHull::from_points(&[
+                    Vector2::new(0.0, 0.0),
+                    Vector2::new(size, size / 2.0),
+                    Vector2::new(size, size),
+                    Vector2::new(0.0, size),
+                ])
+            }
+            Tile::SlantDownLeft => {
+                ConvexHull::from_points(&[
+                    Vector2::new(0.0, 0.0),
+                    Vector2::new(size, 0.0),
+                    Vector2::new(size, size),
+                    Vector2::new(0.0, size / 2.0),
+                ])
+            }
+            Tile::SlantDownRight => {
+                ConvexHull::from_points(&[
+                    Vector2::new(0.0, 0.0),
+                    Vector2::new(size, 0.0),
+                    Vector2::new(size, size / 2.0),
+                    Vector2::new(0.0, size),
+                ])
+            }
+
+            Tile::SlantedWedgeUpLeft => {
+                ConvexHull::from_points(&[
+                    Vector2::new(size, size / 2.0),
+                    Vector2::new(size, size),
+                    Vector2::new(0.0, size),
+                ])
+            }
+            Tile::SlantedWedgeUpRight => {
+                ConvexHull::from_points(&[
+                    Vector2::new(0.0, size / 2.0),
+                    Vector2::new(size, size),
+                    Vector2::new(0.0, size),
+                ])
+            }
+            Tile::SlantedWedgeDownLeft => {
+                ConvexHull::from_points(&[
+                    Vector2::new(size, size / 2.0),
+                    Vector2::new(0.0, 0.0),
+                    Vector2::new(size, 0.0),
+                ])
+            }
+            Tile::SlantedWedgeDownRight => {
+                ConvexHull::from_points(&[
+                    Vector2::new(0.0, size / 2.0),
+                    Vector2::new(0.0, 0.0),
+                    Vector2::new(size, 0.0),
+                ])
+            }
         }
     }
 
     pub fn is_solid(&self, incoming_direction: Direction) -> bool {
         match *self {
             Tile::Square => true,
+
             Tile::WedgeUpLeft => {
                 match incoming_direction {
                     Direction::Down | Direction::Right => false,
@@ -402,6 +476,56 @@ impl Tile {
                     _ => true
                 }
             }
+
+            Tile::SlantUpLeft => {
+                match incoming_direction {
+                    Direction::Down | Direction::Right => false,
+                    _ => true
+                }
+            }
+            Tile::SlantUpRight => {
+                match incoming_direction {
+                    Direction::Down | Direction::Left => false,
+                    _ => true
+                }
+            }
+            Tile::SlantDownLeft => {
+                match incoming_direction {
+                    Direction::Up | Direction::Right => false,
+                    _ => true
+                }
+            }
+            Tile::SlantDownRight => {
+                match incoming_direction {
+                    Direction::Up | Direction::Left => false,
+                    _ => true
+                }
+            }
+
+            Tile::SlantedWedgeUpLeft => {
+                match incoming_direction {
+                    Direction::Down | Direction::Right | Direction::Left => false,
+                    _ => true
+                }
+            }
+            Tile::SlantedWedgeUpRight => {
+                match incoming_direction {
+                    Direction::Down | Direction::Left | Direction::Right => false,
+                    _ => true
+                }
+            }
+            Tile::SlantedWedgeDownLeft => {
+                match incoming_direction {
+                    Direction::Up | Direction::Right | Direction::Left => false,
+                    _ => true
+                }
+            }
+            Tile::SlantedWedgeDownRight => {
+                match incoming_direction {
+                    Direction::Up | Direction::Left | Direction::Right => false,
+                    _ => true
+                }
+            }
         }
     }
 }
@@ -410,10 +534,21 @@ impl<'a> From<&'a str> for Tile {
     fn from(id: &'a str) -> Self {
         match id as &str {
             "Square" => Tile::Square,
+
             "WedgeUpLeft" => Tile::WedgeUpLeft,
             "WedgeUpRight" => Tile::WedgeUpRight,
             "WedgeDownLeft" => Tile::WedgeDownLeft,
             "WedgeDownRight" => Tile::WedgeDownRight,
+
+            "SlantUpLeft" => Tile::SlantUpLeft,
+            "SlantUpRight" => Tile::SlantUpRight,
+            "SlantDownLeft" => Tile::SlantDownLeft,
+            "SlantDownRight" => Tile::SlantDownRight,
+
+            "SlantedWedgeUpLeft" => Tile::SlantedWedgeUpLeft,
+            "SlantedWedgeUpRight" => Tile::SlantedWedgeUpRight,
+            "SlantedWedgeDownLeft" => Tile::SlantedWedgeDownLeft,
+            "SlantedWedgeDownRight" => Tile::SlantedWedgeDownRight,
 
             id => panic!("Did not recognize '{}' as a tile name", id)
         }
@@ -424,10 +559,21 @@ impl std::fmt::Display for Tile {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", match *self {
             Tile::Square => "Square",
+
             Tile::WedgeUpLeft => "WedgeUpLeft",
             Tile::WedgeUpRight => "WedgeUpRight",
             Tile::WedgeDownLeft => "WedgeDownLeft",
             Tile::WedgeDownRight => "WedgeDownRight",
+
+            Tile::SlantUpLeft => "SlantUpLeft",
+            Tile::SlantUpRight => "SlantUpRight",
+            Tile::SlantDownLeft => "SlantDownLeft",
+            Tile::SlantDownRight => "SlantDownRight",
+
+            Tile::SlantedWedgeUpLeft => "SlantedWedgeUpLeft",
+            Tile::SlantedWedgeUpRight => "SlantedWedgeUpRight",
+            Tile::SlantedWedgeDownLeft => "SlantedWedgeDownLeft",
+            Tile::SlantedWedgeDownRight => "SlantedWedgeDownRight",
         })
     }
 }

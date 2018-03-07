@@ -1,6 +1,6 @@
 use glium;
 use glium::{Display, Surface, Frame};
-use trap::Vector2;
+use trap::{Vector2, Vector2i};
 
 pub struct Renderer {
     display: Display,
@@ -10,9 +10,11 @@ pub struct Renderer {
     indices: Vec<u32>,
 
     center: Vector2,
-    size: Vector2,
+    size: Vector2i,
 
     view: (f64, f64, f64, f64),
+
+    viewport: glium::Rect,
 
     pub color: [f64; 4],
     pub line_width: f64,
@@ -40,9 +42,15 @@ impl Renderer {
             indices: Vec::new(),
 
             center: Vector2::new(0.0, 0.0),
-            size: Vector2::new(2.0, 2.0),
+            size: Vector2i::new(2, 2),
 
             view: (-1.0, 1.0, 1.0, -1.0),
+            viewport: glium::Rect{
+                left: 0,
+                bottom: 0,
+                width: 0,
+                height: 0,
+            },
 
             color: [1.0, 0.0, 0.0, 1.0],
             line_width: 1.0,
@@ -54,10 +62,10 @@ impl Renderer {
 
     fn update_view(&mut self) {
         self.view = (
-            self.center.x - self.size.x / 2.0,
-            self.center.x + self.size.x / 2.0,
-            self.center.y - self.size.y / 2.0,
-            self.center.y + self.size.y / 2.0
+            self.center.x - self.viewport.width as f64 / 2.0,
+            self.center.x + self.viewport.width as f64 / 2.0,
+            self.center.y - self.viewport.height as f64 / 2.0,
+            self.center.y + self.viewport.height as f64 / 2.0
         );
     }
 
@@ -74,15 +82,29 @@ impl Renderer {
     }
 
 
+    /// Sets the viewport to use in the next render
+    pub fn set_viewport(&mut self, left: u32, right: u32, top: u32, bottom: u32) {
+        self.flush();
+
+        self.viewport.left = left;
+        self.viewport.bottom = self.size.y as u32 - bottom;
+        self.viewport.width = right - left;
+        self.viewport.height = bottom - top;
+    }
+
+
     /// Begin a new rendering procedure
     pub fn begin(&mut self) {
         self.frame = Some(self.display.draw());
 
-        if let Some((w, h)) = self.display.gl_window().window().get_inner_size() {
-            let w = w as f64;
-            let h = h as f64;
-            self.size.x = w;
-            self.size.y = h;
+        if let Some((width, height)) = self.display.gl_window().window().get_inner_size() {
+            self.size.x =  width as i64;
+            self.size.y = height as i64;
+
+            self.viewport.left = 0;
+            self.viewport.bottom = 0;
+            self.viewport.width = width;
+            self.viewport.height = height;
         }
 
         self.center.x = 0.0;
@@ -132,8 +154,16 @@ impl Renderer {
                     color: glium::BlendingFunction::Addition { source: glium::LinearBlendingFactor::SourceAlpha, destination: glium::LinearBlendingFactor::OneMinusSourceAlpha },
                     alpha: glium::BlendingFunction::AlwaysReplace,
                     constant_value: (1.0, 1.0, 1.0, 1.0),
-                }
-                ,
+                },
+
+                 viewport: Some(self.viewport),
+                /*viewport: Some(glium::Rect{
+                    left: 0,
+                    bottom: 0,
+                    width: 1280,
+                    height: 500,
+                }),*/
+
                 ..Default::default()
             };
 

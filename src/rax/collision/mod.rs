@@ -10,6 +10,9 @@ mod circle;
 pub use self::circle::Circle;
 
 
+mod rectangle;
+pub use self::rectangle::Rectangle;
+
 pub trait Collide<C>: Bounded {
     // Return the overlap depth and the minimal translation vector of self
     fn overlap(&self, other: &C) -> Option<(f64, Vector2)>;

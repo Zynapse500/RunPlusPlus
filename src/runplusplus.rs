@@ -179,6 +179,10 @@ impl Game for RunPlusPlus {
                 self.tile_map.add_tile([bx, by].into(), Tile::WedgeDownLeft)
             } else if self.pressed_keys.contains(&KeyCode::Key4) {
                 self.tile_map.add_tile([bx, by].into(), Tile::WedgeDownRight)
+            } else if self.pressed_keys.contains(&KeyCode::Key5) {
+                self.tile_map.add_tile([bx, by].into(), Tile::SlantUpLeft)
+            } else if self.pressed_keys.contains(&KeyCode::Key6) {
+                self.tile_map.add_tile([bx, by].into(), Tile::SlantedWedgeUpLeft)
             } else {
                 self.tile_map.add_tile([bx, by].into(), Tile::Square)
             }

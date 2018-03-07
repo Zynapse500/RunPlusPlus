@@ -1,3 +1,6 @@
+
+use ::TILE_SIZE;
+
 use trap::Vector2;
 use rax::collision::*;
 
@@ -57,8 +60,8 @@ struct RagDoll {
 
 impl Player {
     pub fn new(position: Vector2) -> Player {
-        let w = 24.0;
-        let h = 45.0;
+        let w = TILE_SIZE / 2.0;
+        let h = TILE_SIZE - 3.0;
         let mut player = Player {
             //collision: Circle::new(position, 45.0 / 2.0),
             collision: ConvexHull::from_points(&[

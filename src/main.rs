@@ -1,12 +1,15 @@
+
+// TODO: Fix normals inside slanted tiles       - Might be fixed with specifying ranges for each edge
+
 // TODO: Add better level editing support
-// TODO: Split level editor into own module
+
 // TODO: Add exit
 // TODO: Add "traps"        - bombs, static lasers, etc.
-// TODO: Add enemies        - rocket launchers, targeting lasers, chasing orbs, etc.
 // TODO: Add coins
+// TODO: Add level timer
+// TODO: Add enemies        - rocket launchers, targeting lasers, chasing orbs, etc.
 // TODO: Add buttons        - to activate doors
 // TODO: Add obstacles      - doors
-// TODO: Add level timer
 
 
 const TILE_SIZE: f64 = 48.0;
@@ -39,9 +42,8 @@ fn main() {
         .with_title("R++")
         .with_size(1280, 720)
         .with_fullscreen(false)
-        .with_vsync(false)
+        .with_vsync(true)
         .with_samples(8);
-
 
     game.run(MainGame::new());
 }

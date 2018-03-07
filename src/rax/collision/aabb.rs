@@ -38,6 +38,13 @@ impl AABB {
         self.left <= other.right && other.left <= self.right &&
             self.top <= other.bottom && other.top <= self.bottom
     }
+
+
+    /// Returns true if this box contains a point
+    pub fn contains(&self, point: Vector2) -> bool {
+        self.left < point.x && point.x < self.right &&
+            self.top < point.y && point.y < self.bottom
+    }
 }
 
 
