@@ -169,6 +169,7 @@ impl Player {
     pub fn draw(&self, renderer: &mut Renderer) {
         {
             renderer.color = [0.0, 0.0, 1.0, 0.3];
+            // renderer.fill_circle(self.collision.center, self.collision.radius);
             // renderer.fill_convex(self.collision.get_points());
 
             renderer.color = [1.0, 1.0, 1.0, 1.0];
@@ -413,7 +414,9 @@ impl Player {
     fn check_collisions(&mut self, obstacles: &[&Collide<ConvexHull>]) {
         self.ground_normal = None;
 
-        let mut i = 0;
+        let mut final_normal = None;
+
+        let mut remaining_iterations = 100;
         loop {
             let first = {
                 // First, find all overlaps, then find the smallest overlap
@@ -423,8 +426,10 @@ impl Player {
 
             if let Some(overlap) = first {
                 self.resolve_overlap(overlap);
-                i += 1;
-                if i > 10 {
+                final_normal = Some(-overlap.1.norm());
+
+                remaining_iterations -= 1;
+                if remaining_iterations == 0 {
                     break;
                 }
             } else {
@@ -432,6 +437,10 @@ impl Player {
             }
         }
 
+
+        if let Some(normal) = final_normal {
+            self.collision_response(normal);
+        }
 
         self.check_wall_climb(obstacles);
     }
@@ -441,9 +450,11 @@ impl Player {
         let (_, resolve) = overlap;
 
         self.translate(-resolve);
+    }
 
-        let normal = -resolve.norm();
 
+    /// Applies a collision response
+    fn collision_response(&mut self, normal: Vector2) {
         // Slide
         if normal.dot(self.velocity) < 0.0 {
             let plane = Vector2::new(normal.y, -normal.x);

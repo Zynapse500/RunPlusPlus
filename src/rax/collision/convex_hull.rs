@@ -58,6 +58,11 @@ impl ConvexHull {
         self.points.as_slice()
     }
 
+    /// Return the normals of this hull
+    pub fn get_axes<'a>(&'a self) -> &'a [Vector2] {
+        self.axes.as_slice()
+    }
+
 
     /// Return the average of all points of this hull
     pub fn average(&self) -> Vector2 {

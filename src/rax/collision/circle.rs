@@ -13,6 +13,11 @@ impl Circle {
             radius,
         }
     }
+
+
+    pub fn translate(&mut self, amount: Vector2) {
+        self.center += amount;
+    }
 }
 
 

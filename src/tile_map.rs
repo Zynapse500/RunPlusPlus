@@ -243,7 +243,7 @@ impl TileMap {
             this.1.clear_ignored_normals();
             for n in neighbours.into_iter() {
                 // if this.0.is_solid(n.1.opposite()) {
-                this.1.ignore_normal(n.1.as_delta().into());
+                // this.1.ignore_normal(n.1.as_delta().into());
                 // }
             }
         }

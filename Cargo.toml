@@ -3,6 +3,14 @@ name = "runplusplus"
 version = "0.1.0"
 authors = ["Christofer Nolander <christofer.nolander@gmail.com>"]
 
+[[bin]]
+name = "runplusplus"
+path = "src/main.rs"
+
+[[bin]]
+name = "collision_tests"
+path = "src/collision_test.rs"
+
 [dependencies]
 glium = "*"
 trap = {git = "https://github.com/Zynapse500/trap-rs"}

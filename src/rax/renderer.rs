@@ -107,8 +107,8 @@ impl Renderer {
             self.viewport.height = height;
         }
 
-        self.center.x = 0.0;
-        self.center.y = 0.0;
+        self.center.x = self.size.x as f64 / 2.0;
+        self.center.y = self.size.y as f64 / 2.0;
 
         self.update_view();
     }
@@ -283,6 +283,34 @@ impl Renderer {
                     self.indices.push(start_index + index as u32 + 1);
                     self.indices.push(start_index + index as u32 + 2);
                 }
+            }
+        }
+    }
+
+
+    /// Render the outline of a convex polygon
+    pub fn draw_convex(&mut self, points: &[Vector2]) {
+        use std::f64::INFINITY;
+        let mut left = INFINITY;
+        let mut right = -INFINITY;
+        let mut top = INFINITY;
+        let mut bottom = -INFINITY;
+
+        for point in points.iter() {
+            if point.x < left { left = point.x };
+            if point.x > right { right = point.x };
+            if point.y < top { top = point.y };
+            if point.y > bottom { bottom = point.y };
+        }
+
+        if self.rectangle_visible(left, right, top, bottom) {
+            let start_index = self.vertices.len() as u32;
+
+            for i in 0..points.len() {
+                let a = i;
+                let b = (i + 1) % points.len();
+
+                self.draw_line(points[a], points[b]);
             }
         }
     }
